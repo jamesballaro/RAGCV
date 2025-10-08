@@ -22,12 +22,17 @@ This repository provides a retrieval-augmented generation (RAG) pipeline for qui
 2. Set your OpenAI API key:
    export OPENAI_API_KEY="sk-xxxx"
 
-3. Add input data:
+3. Export langchain envvars [NOTE: NEEDS FIX]:
+   export LANGCHAIN_TRACING_V2="false"
+   export LANGCHAIN_API_KEY=""
+   export LANGCHAIN_ENDPOINT=""
+
+4. Add input data:
 - Place your job query in input/query.txt.
 - Add previous CVs to data/CVs and cover letters to data/coverletters.
 - Optionally, add templates to data/templates.
 
-4. Customize system prompts (optional) in the prompts/ folder.
+5. Customize system prompts (optional) in the prompts/ folder.
 
 ## Running the Pipeline
 python3 src/main.py
@@ -46,22 +51,28 @@ python3 src/main.py
 - Main Pipeline: Orchestrates the full workflow from input query to output generation and file saving.
 
 ## File Structure
-├─ data/                  # Input documents
-│  ├─ CVs/
-│  ├─ coverletters/
-│  └─ templates/
-├─ input/
-│  └─ query.txt           # Job description or prompt
-├─ output/                # Generated CV/cover letters
-├─ prompts/               # Agent system prompts
-├─ src/
-│  ├─ main.py             # Entry point
-│  ├─ loader.py           # Data loading & chunking
-│  ├─ graph.py            # Agent graph
-│  ├─ agents.py           # Agent definitions
-│  └─ tools.py            # Utility tools
-└─ environment.yml        # Conda environment
+```
+data/                  # Input documents
+├── CVs/
+├── coverletters/
+└── templates/
 
+input/
+└── query.txt           # Job description or prompt
+
+output/                # Generated CV/cover letters
+
+prompts/               # Agent system prompts
+
+src/
+├── main.py             # Entry point
+├── loader.py           # Data loading & chunking
+├── graph.py            # Agent graph
+├── agents.py           # Agent definitions
+└── tools.py            # Utility tools
+
+environment.yml        # Conda environment
+```
 
 ## Notes
 The project was primarily built to gain hands-on experience with LangChain, LangGraph, and RAG workflows. Some components use custom implementations instead of pre-built abstractions.
