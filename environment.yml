@@ -1,0 +1,14 @@
+
+name: ragcv
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - numpy
+  - scipy
+  - pytorch
+  - faiss-cpu
+  - pandas
+  - pip
+  - pip:
+      - -r requirements.txt
