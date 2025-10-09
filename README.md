@@ -20,12 +20,14 @@ This repository provides a retrieval-augmented generation (RAG) pipeline for qui
    conda activate ragcv
 
 2. Set your OpenAI API key:
-   export OPENAI_API_KEY="sk-xxxx"
+```bash
+export OPENAI_API_KEY="sk-xxxx"
+```
 
 3. Export langchain envvars [NOTE: NEEDS FIX]:
-   export LANGCHAIN_TRACING_V2="false"
-   export LANGCHAIN_API_KEY=""
-   export LANGCHAIN_ENDPOINT=""
+```bash
+export LANGCHAIN_TRACING_V2="false"
+```
 
 4. Add input data:
 - Place your job query in input/query.txt.

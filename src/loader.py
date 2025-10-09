@@ -21,6 +21,16 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
+def compile_docs(loaders, folder):
+    for loader in loaders:
+        doc = loader.load()
+        folder.extend(doc)
+        if isinstance(doc, list) and all(isinstance(d, Document) for d in doc):
+            print("\t * Loaded doc from:", doc[0].metadata['source'])
+        else:
+            print("\t * Error loading:", doc[0].metadata['source'])
+
+
 class DataLoader():
     def __init__(self, data_path: os.PathLike, db_path: os.PathLike, chunk_size: int = 1024, chunk_overlap: int = 256 ):
         self.data_path = data_path
@@ -38,43 +48,38 @@ class DataLoader():
 
     def load(self):
         #TODO: Add JSON parsing?
-        print("* Loading data")
         if self.loaders is None:
             cv_loaders = [self.create_loader(pdf, self.cv_folder_path) for pdf in os.listdir(self.cv_folder_path)]
             cl_loaders = [self.create_loader(pdf, self.cl_folder_path) for pdf in os.listdir(self.cl_folder_path)]
             tp_loaders = [self.create_loader(pdf, self.tp_folder_path) for pdf in os.listdir(self.tp_folder_path)]
-            self.loaders = [cv_loaders, cl_loaders, tp_loaders]
 
-        if self.documents is None:
-           self.all_cvs = []
-           self.all_cls = []
-           self.all_tps = []
+            if self.documents is None:
+                self.all_cvs = []
+                self.all_cls = []
+                self.all_tps = []
 
-        for loader in self.loaders[0]:
-            self.all_cvs.extend(loader.load())
+            self.documents = [
+                {
+                    "type":"cv",
+                    "loaders":cv_loaders,
+                    "folder":self.all_cvs
+                },
+                {
+                    "type":"cl",
+                    "loaders":cl_loaders,
+                    "folder":self.all_cls
+                },
+                {
+                    "type":"tp",
+                    "loaders":tp_loaders,
+                    "folder":self.all_tps
+                }
+            ]
 
-        for loader in self.loaders[1]:
-            self.all_cls.extend(loader.load())
+        for cat in self.documents:
+              compile_docs(cat['loaders'], cat['folder'])
 
-        for loader in self.loaders[2]:
-            self.all_tps.extend(loader.load())
-
-        self.documents = [
-            {
-                'type': 'cv',
-                'docs': self.all_cvs
-            },
-            {
-                'type': 'cl',
-                'docs': self.all_cls
-            },
-            {
-                'type': 'tp',
-                'docs': self.all_tps
-            }
-        ]
         self.all_files = [doc.metadata['source'] for doc in self.all_cvs + self.all_cls + self.all_tps]
-        print("-- Success")
         return
 
     def create_loader(self, filename, folder):
@@ -92,7 +97,6 @@ class DataLoader():
             raise ValueError(f"Unsupported file type: {ext}")
 
     def chunk_cv(self,text: str) -> List[str]:
-        print("* Chunking CV")
         # Split into sections by uppercase headers
         sections = re.split(r"\n(?=[A-Z][A-Z ]{2,})", text)
         bullets = []
@@ -107,12 +111,10 @@ class DataLoader():
             separators=["\n", ".", " "],
         )
         final_chunks = splitter.split_text("\n".join(bullets))
-        print("-- Success")
         return final_chunks
 
 
     def chunk_cover_letter(self, text: str) -> List[str]:
-        print("* Chunking cover letter")
         paragraphs = [p.strip() for p in text.split("\n\n") if len(p.strip()) > 30]
         joined = "\n\n".join(paragraphs)
 
@@ -122,17 +124,14 @@ class DataLoader():
             separators=["\n\n", ".", " "],
         )
         final_chunks = splitter.split_text(joined)
-        print("-- Success")
         return final_chunks
 
     def chunk_template(self, text: str) -> List[str]:
-        print("* Chunking template")
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
         )
         final_chunks = splitter.split_text(text)
-        print("-- Success")
         return final_chunks
 
     def generate_db_metadata(self):
@@ -172,7 +171,7 @@ class DataLoader():
         for docs in self.documents:
             doc_type = docs['type']
 
-            for doc in docs['docs']:
+            for doc in docs['folder']:
                 content = doc.page_content
                 if doc_type == 'cv':
                     chunks = self.chunk_cv(content)

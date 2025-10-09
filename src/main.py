@@ -16,6 +16,9 @@ def main():
     load_dotenv()
 
     # Load the data
+    print("="*60)
+    print("Loading data from files")
+    print("="*60)
     loader = DataLoader(data_path="data", db_path="data/db.faiss")
 
     if not loader.db_similarity():

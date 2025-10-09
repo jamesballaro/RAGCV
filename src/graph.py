@@ -61,7 +61,7 @@ class RouterGraph:
                 last_msg = result["messages"][-1]
                 self.execution_log.append({
                     "agent": agent_name,
-                    "message": last_msg.content[:300]
+                    "message": last_msg.content
                 })
             return result
         return wrapped_agent

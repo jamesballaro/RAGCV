@@ -36,6 +36,7 @@ class Agent():
 
         # Add tools to the LLM
         self.llm = ChatOpenAI(temperature=temperature, model_name=model_name)
+
         if self.tools:
             self.llm = self.llm.bind_tools(self.tools)
 
@@ -82,13 +83,18 @@ class Agent():
 
     def build_chain(self):
         self.chain = self.prompt_template | self.llm
-    
+
     #TODO: should this be here?
     def format_docs(self, docs: list) -> str:
         return "\n\n".join([doc.page_content for doc in docs])
 
     def __call__(self, state):
+        print("="*60)
+        print("Agent called: ", self.prompt_path)
+        print("="*60)
+        print("")
         messages = state.get("messages", [])
+        
         result = self.chain.invoke({"messages": messages})
 
         # Case 1: Model called a tool
@@ -98,6 +104,10 @@ class Agent():
                 tool_name = call["name"]
                 tool_input = call["args"]
 
+                print("-"*60)
+                print("Tool called: ", call["name"],"()")
+                print("-"*60)
+                
                 matching_tool = next((t for t in self.tools if t.name == tool_name), None)
                 if not matching_tool:
                     raise ValueError(f"Tool '{tool_name}' not found in agent's tool list.")
@@ -111,8 +121,7 @@ class Agent():
                     )
                 )
 
-            final = self.llm.invoke(messages + [result] + tool_messages)
-            return {"messages": [final]}
+            return {"messages": [result] + tool_messages}
 
         # Case 2: No tool call
         return {"messages": [result]}
