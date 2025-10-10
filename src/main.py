@@ -24,7 +24,7 @@ def main():
     if not loader.db_similarity():
         vectorstore = loader.build_vectorstore()
     else:
-        print("* Loading vectorstore")
+        print("\n [Corpus unchanged since last build, loading existing vectorstore.]\n")
         vectorstore = FAISS.load_local(
                 loader.db_path,
                 OpenAIEmbeddings(),

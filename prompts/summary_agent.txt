@@ -68,5 +68,5 @@ Structure your summary using clear headers and bullet points. Use this hierarchy
 
 When the job description is vague or poorly written:
 - Infer likely requirements based on job title and industry norms
-- Note assumptions clearly
+- Note assumptions clearly - this is crucial for accurate summaries
 - Ask clarifying questions if critical information is ambiguous

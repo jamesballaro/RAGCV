@@ -24,7 +24,7 @@ from langchain.tools import tool
 class Agent():
     def __init__(self,
             prompt_path: os.PathLike,
-            model_name: str = "gpt-3.5-turbo",
+            model_name: str = "gpt-5",
             temperature: float = 0.8,
             retriever = None,
             tools = None,
