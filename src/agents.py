@@ -1,38 +1,35 @@
 # This file will contain the various agents that will be used in the graph
 import os
-import operator
+from typing import Any, List, Optional
 
-from typing import TypedDict, List, Annotated
-
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain.chains import LLMChain, ConversationalRetrievalChain, RetrievalQA
-from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder, SystemMessagePromptTemplate, HumanMessagePromptTemplate
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AnyMessage, ToolMessage
-from langchain_core.runnables import RunnableParallel
-from langchain_community.document_loaders import (
-    TextLoader,
-    PyPDFLoader,
-    UnstructuredPDFLoader,
+from langchain_core.messages import AnyMessage, BaseMessage, ToolMessage
+from langchain_core.prompts import (
+    ChatPromptTemplate,
+    MessagesPlaceholder,
+    SystemMessagePromptTemplate,
 )
-from langchain_community.vectorstores import FAISS
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
-from langchain.tools import tool
+from langchain_core.runnables import RunnableParallel
+from langchain_openai import ChatOpenAI
 
-# Create an agent class to easily create specialized agents
-class Agent():
-    def __init__(self,
-            prompt_path: os.PathLike,
-            model_name: str = "gpt-5",
-            temperature: float = 0.8,
-            retriever = None,
-            tools = None,
-            ):
+from logger import AgentJSONLLogger
+
+
+class Agent:
+    def __init__(
+        self,
+        prompt_path: os.PathLike,
+        model_name: str = "gpt-5",
+        temperature: float = 0.8,
+        retriever=None,
+        tools=None,
+        logger: Optional[AgentJSONLLogger] = None,
+    ):
         self.prompt_path = prompt_path
         self.tools = tools or []
         self.retriever = retriever
         self.chain = None
+        self.logger = logger
+        self._last_retrieved_docs: Optional[List[Any]] = None
 
         # Add tools to the LLM
         self.llm = ChatOpenAI(temperature=temperature, model_name=model_name)
@@ -59,7 +56,7 @@ class Agent():
             self.system_prompt = ""
             return
 
-    def build_prompt_template(self, human_template="{input}"):
+    def build_prompt_template(self):
         prompt = self.system_prompt
 
         if self.retriever: prompt += "\n\nContext: {context}"
@@ -84,9 +81,58 @@ class Agent():
     def build_chain(self):
         self.chain = self.prompt_template | self.llm
 
-    #TODO: should this be here?
     def format_docs(self, docs: list) -> str:
+        if self.logger is not None:
+            self._last_retrieved_docs = [
+                {
+                    "content": doc.page_content,
+                    "metadata": getattr(doc, "metadata", {}),
+                }
+                for doc in docs
+            ]
         return "\n\n".join([doc.page_content for doc in docs])
+
+    def _serialize_message(self, message: BaseMessage) -> dict:
+        return {
+            "type": message.__class__.__name__,
+            "content": getattr(message, "content", None),
+            "name": getattr(message, "name", None),
+            "tool_calls": getattr(message, "tool_calls", []),
+            "additional_kwargs": getattr(message, "additional_kwargs", {}),
+            "response_metadata": getattr(message, "response_metadata", {}),
+        }
+
+    def _log_invocation(
+        self,
+        *,
+        input_messages: List[AnyMessage],
+        output_messages: List[AnyMessage],
+        tool_logs: List[dict],
+    ) -> None:
+        if self.logger is None:
+            return
+
+        serialized_input = [self._serialize_message(msg) for msg in input_messages]
+        serialized_output = [self._serialize_message(msg) for msg in output_messages]
+
+        diagnostics = {
+            "prompt_path": self.prompt_path,
+            "uses_retriever": self.retriever is not None,
+        }
+        if self._last_retrieved_docs is not None:
+            diagnostics["retrieved_documents"] = self._last_retrieved_docs
+            self._last_retrieved_docs = None
+
+        self.logger.log(
+            {
+                "agent_name": getattr(self, "name", self.prompt_path),
+                "event": "agent_invocation",
+                "input_messages": serialized_input,
+                "output_messages": serialized_output,
+                "tool_calls": tool_logs,
+                "diagnostics": diagnostics,
+            }
+        )
 
     def __call__(self, state):
         print("="*60)
@@ -94,8 +140,9 @@ class Agent():
         print("="*60)
         print("")
         messages = state.get("messages", [])
-        
+
         result = self.chain.invoke({"messages": messages})
+        tool_logs = []
 
         # Case 1: Model called a tool
         if hasattr(result, "tool_calls") and result.tool_calls:
@@ -107,7 +154,7 @@ class Agent():
                 print("-"*60)
                 print("Tool called: ", call["name"],"()")
                 print("-"*60)
-                
+
                 matching_tool = next((t for t in self.tools if t.name == tool_name), None)
                 if not matching_tool:
                     raise ValueError(f"Tool '{tool_name}' not found in agent's tool list.")
@@ -120,8 +167,26 @@ class Agent():
                         content=str(tool_output)
                     )
                 )
+                tool_logs.append(
+                    {
+                        "tool_name": tool_name,
+                        "args": tool_input,
+                        "output": str(tool_output),
+                    }
+                )
 
-            return {"messages": [result] + tool_messages}
+            response_messages = [result] + tool_messages
+            self._log_invocation(
+                input_messages=messages,
+                output_messages=response_messages,
+                tool_logs=tool_logs,
+            )
+            return {"messages": response_messages}
 
         # Case 2: No tool call
+        self._log_invocation(
+            input_messages=messages,
+            output_messages=[result],
+            tool_logs=tool_logs,
+        )
         return {"messages": [result]}

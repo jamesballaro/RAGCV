@@ -7,7 +7,6 @@ import json
 from typing import TypedDict, List, Annotated
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain.chains import LLMChain, ConversationalRetrievalChain
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AnyMessage
 from langchain_community.document_loaders import (
