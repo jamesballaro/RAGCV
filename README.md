@@ -45,6 +45,13 @@ python3 src/main.py
 ## Tools
 - write_to_file: Writes text content to a file within the ./output directory.
 
+## Retrieval Fidelity Enhancements
+- **Adaptive Retrieval**: Metadata-aware filtering + MMR reranking reduces redundant context while respecting agent doc-type requirements.
+- **Sentence-Level Chunking**: CV/CL prose is chunked on sentence boundaries with doc-type specific sizes; templates use macro-friendly micro-chunks.
+- **Deduplication**: Near-duplicate chunks are removed before prompting, and each context line is annotated with `[source | doc_type | score]`.
+- **Score-Aware Prompts**: Agents can reason about retrieval confidence (e.g., the CL agent deprioritizes chunks with a score below `0.30`).
+- **Vectorstore Schema Versioning**: Automatic rebuilds ensure metadata stays aligned with the retrieval strategy.
+
 ## Architecture Overview
 
 - DataLoader: Loads CVs, cover letters, and templates, and chunks them appropriately for RAG.
