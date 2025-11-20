@@ -64,6 +64,11 @@ Structure your summary using clear headers and bullet points. Use this hierarchy
 - Flag any inconsistencies in the job description
 - Keep summaries concise but comprehensive (typically 300-500 words)
 
+Output Instructions
+
+After generating content, you MUST use the write_to_file tool to save your output:
+	•	Filename: "summary_output.txt"
+
 ### Special Instructions
 
 When the job description is vague or poorly written:
