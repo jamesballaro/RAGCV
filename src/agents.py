@@ -12,6 +12,11 @@ from langchain_core.runnables import RunnableParallel
 from langchain_openai import ChatOpenAI
 
 from logger import AgentJSONLLogger
+from utils.context import (
+    ContextAssemblyConfig,
+    assemble_with_token_budget,
+    format_weighted_context,
+)
 
 
 class Agent:
@@ -24,6 +29,7 @@ class Agent:
         tools=None,
         logger: Optional[AgentJSONLLogger] = None,
         agent_type: Optional[str] = None,
+        context_config: Optional[ContextAssemblyConfig] = None,
     ):
         self.prompt_path = prompt_path
         self.tools = tools or []
@@ -32,6 +38,7 @@ class Agent:
         self.logger = logger
         self._last_retrieved_docs: Optional[List[Any]] = None
         self.agent_type = agent_type
+        self.context_config = context_config or ContextAssemblyConfig()
 
         # Add tools to the LLM
         self.llm = ChatOpenAI(temperature=temperature, model_name=model_name)
@@ -84,29 +91,21 @@ class Agent:
         self.chain = self.prompt_template | self.llm
 
     def format_docs(self, docs: list) -> str:
-        formatted_chunks = []
-        serialized_docs = []
-        for doc in docs:
-            metadata = dict(getattr(doc, "metadata", {}) or {})
-            serialized_docs.append(
-                {
-                    "content": doc.page_content,
-                    "metadata": metadata,
-                }
-            )
-            source = metadata.get("source", "unknown")
-            doc_type = metadata.get("doc_type", "unknown")
-            score = metadata.get("retrieval_score")
-            if isinstance(score, (int, float)):
-                score_str = f"{score:.3f}"
-            else:
-                score_str = "n/a"
-            formatted_chunks.append(
-                f"[source={source} doc_type={doc_type} score={score_str}] {doc.page_content.strip()}"
-            )
+        snippets = assemble_with_token_budget(docs, config=self.context_config)
         if self.logger is not None:
-            self._last_retrieved_docs = serialized_docs
-        return "\n\n".join(formatted_chunks)
+            self._last_retrieved_docs = [
+                {
+                    "mode": snippet.mode,
+                    "score": snippet.score,
+                    "tokens": snippet.tokens,
+                    "source": snippet.source,
+                    "doc_type": snippet.doc_type,
+                    "metadata": snippet.metadata,
+                    "text": snippet.text,
+                }
+                for snippet in snippets
+            ]
+        return format_weighted_context(snippets)
 
     def _serialize_message(self, message: BaseMessage) -> dict:
         return {

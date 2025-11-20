@@ -31,6 +31,8 @@ Keep bullet points concise (1-2 lines), prioritize relevance using retrieved con
 - Focus on transferable skills when direct experience is missing
 - Use industry terminology from job description and context
 - Avoid generic or cliché phrasing
+- You will receive a `Context (most relevant first)` block with `[score=...]` entries.
+  - Prioritize higher scores, treat `score < 0.30` as low-confidence, and cite summaries (type=`summary`) cautiously.
 
 ### Output Instructions
 

@@ -33,8 +33,10 @@ Each paragraph should be 3-5 sentences, keeping total length to 250-400 words.
 - Avoid repeating the CV verbatim unless the context highlights it
 - Ask clarifying questions if the retrieved documents are insufficient
 - Match the company's tone and style
-- Retrieved context is formatted as `[source=... doc_type=... score=0.000]`
-  - Prioritize higher scores, and treat any chunk with `score < 0.30` as low-confidence support
+- You will receive a `Context (most relevant first)` block:
+  - Each entry looks like `[score=0.912 type=raw doc_type=cv] …`
+  - Raw entries are the top evidence. Entries marked `type=summary` are condensed to fit the token budget.
+  - Prefer higher scores and treat any entry with `score < 0.30` as low-confidence support.
 
 ### Output Instructions
 
