@@ -15,13 +15,14 @@ from agents import Agent
 from tools import write_to_file
 from dotenv import load_dotenv
 from logger import AgentJSONLLogger
+from utils.retrieval import AdaptiveRetriever
 
 def main():
     load_dotenv()
     parser = argparse.ArgumentParser()
 
     time = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
-    parser.add_argument("--test_name", default=dt)
+    parser.add_argument("--test_name", default=time)
     args = parser.parse_args()
 
     # Load the data
@@ -29,21 +30,20 @@ def main():
     print("Loading data from files")
     print("="*60)
     loader = DataLoader(data_path="data", db_path="data/db.faiss")
+    embeddings = OpenAIEmbeddings()
 
     if not loader.db_similarity():
-        vectorstore = loader.build_vectorstore()
+        vectorstore = loader.build_vectorstore(embeddings=embeddings)
     else:
         print("\n [Corpus unchanged since last build, loading existing vectorstore.]\n")
         vectorstore = FAISS.load_local(
                 loader.db_path,
-                OpenAIEmbeddings(),
+                embeddings,
                 allow_dangerous_deserialization=True
             )
 
-    retriever = vectorstore.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": 10},
-            )
+    cv_retriever = AdaptiveRetriever(vectorstore=vectorstore, embeddings=embeddings, agent_type="cv")
+    cl_retriever = AdaptiveRetriever(vectorstore=vectorstore, embeddings=embeddings, agent_type="cl")
 
     log_path = f"logs/agent_runs_{args.test_name}.jsonl"
     agent_logger = AgentJSONLLogger(log_path=log_path)
@@ -65,29 +65,32 @@ def main():
             "name": "CV_Agent",
             "agent": Agent(
                 prompt_path="prompts/cv_agent.txt",
-                retriever=retriever,
+                retriever=cv_retriever,
                 tools=tools_list,
                 logger=agent_logger,
+                agent_type="cv",
             ),
         },
         {
             "name": "CL_Agent",
             "agent": Agent(
                 prompt_path="prompts/cl_agent.txt",
-                retriever=retriever,
+                retriever=cl_retriever,
                 tools=tools_list,
                 logger=agent_logger,
+                agent_type="cl",
             ),
         },
-        {
-            "name": "Latex_Agent",
-            "agent": Agent(
-                prompt_path="prompts/latex_agent.txt",
-                retriever=retriever,
-                tools=tools_list,
-                logger=agent_logger,
-            ),
-        },
+        # {
+        #     "name": "Latex_Agent",
+        #     "agent": Agent(
+        #         prompt_path="prompts/latex_agent.txt",
+        #         retriever=latex_retriever,
+        #         tools=tools_list,
+        #         logger=agent_logger,
+        #         agent_type="latex",
+        #     ),
+        # },
         {
             "name": "Summary_Agent",
             "agent": Agent(
