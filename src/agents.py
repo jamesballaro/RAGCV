@@ -23,6 +23,7 @@ class Agent:
         retriever=None,
         tools=None,
         logger: Optional[AgentJSONLLogger] = None,
+        agent_type: Optional[str] = None,
     ):
         self.prompt_path = prompt_path
         self.tools = tools or []
@@ -30,6 +31,7 @@ class Agent:
         self.chain = None
         self.logger = logger
         self._last_retrieved_docs: Optional[List[Any]] = None
+        self.agent_type = agent_type
 
         # Add tools to the LLM
         self.llm = ChatOpenAI(temperature=temperature, model_name=model_name)
@@ -82,15 +84,29 @@ class Agent:
         self.chain = self.prompt_template | self.llm
 
     def format_docs(self, docs: list) -> str:
-        if self.logger is not None:
-            self._last_retrieved_docs = [
+        formatted_chunks = []
+        serialized_docs = []
+        for doc in docs:
+            metadata = dict(getattr(doc, "metadata", {}) or {})
+            serialized_docs.append(
                 {
                     "content": doc.page_content,
-                    "metadata": getattr(doc, "metadata", {}),
+                    "metadata": metadata,
                 }
-                for doc in docs
-            ]
-        return "\n\n".join([doc.page_content for doc in docs])
+            )
+            source = metadata.get("source", "unknown")
+            doc_type = metadata.get("doc_type", "unknown")
+            score = metadata.get("retrieval_score")
+            if isinstance(score, (int, float)):
+                score_str = f"{score:.3f}"
+            else:
+                score_str = "n/a"
+            formatted_chunks.append(
+                f"[source={source} doc_type={doc_type} score={score_str}] {doc.page_content.strip()}"
+            )
+        if self.logger is not None:
+            self._last_retrieved_docs = serialized_docs
+        return "\n\n".join(formatted_chunks)
 
     def _serialize_message(self, message: BaseMessage) -> dict:
         return {
@@ -119,7 +135,15 @@ class Agent:
             "prompt_path": self.prompt_path,
             "uses_retriever": self.retriever is not None,
         }
+        
         if self._last_retrieved_docs is not None:
+            retriever_config = {}
+            if hasattr(self.retriever, "search_type"):
+                retriever_config["search_type"] = self.retriever.search_type
+            if hasattr(self.retriever, "search_kwargs"):
+                retriever_config["search_kwargs"] = self.retriever.search_kwargs
+            if retriever_config:
+                diagnostics["retriever_config"] = retriever_config
             diagnostics["retrieved_documents"] = self._last_retrieved_docs
             self._last_retrieved_docs = None
 
