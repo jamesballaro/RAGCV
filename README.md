@@ -52,6 +52,11 @@ python3 src/main.py
 - **Score-Aware Prompts**: Agents can reason about retrieval confidence (e.g., the CL agent deprioritizes chunks with a score below `0.30`).
 - **Vectorstore Schema Versioning**: Automatic rebuilds ensure metadata stays aligned with the retrieval strategy.
 
+## Context Assembly Improvements
+- **Token-Budget Enforcement**: A configurable assembler keeps the prompt under ~6K context tokens by keeping the top-N raw chunks and summarizing lower-ranked ones.
+- **Hierarchical Evidence**: Raw entries mark high-confidence passages; summarized entries preserve additional coverage without blowing the budget.
+- **Weighted Injection**: Agents now receive a `Context (most relevant first)` block with explicit `[score=… type=… doc_type=…]` markers and instructions to treat low scores as low-confidence.
+
 ## Architecture Overview
 
 - DataLoader: Loads CVs, cover letters, and templates, and chunks them appropriately for RAG.
