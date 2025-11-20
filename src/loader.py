@@ -40,8 +40,8 @@ class DataLoader():
         self.schema_version = "retrieval_fidelity_v1"
 
         self.cv_folder_path = os.path.join(data_path, "CVs")
-        self.cl_folder_path = os.path.join(data_path, "coverletters")
-        self.notes_folder_path = os.path.join(data_path, "notes")
+        self.cl_folder_path = os.path.join(data_path, "Cover Letters")
+        self.notes_folder_path = os.path.join(data_path, "Notes")
 
         self.load()
 
