@@ -1,14 +1,11 @@
 # This file will parse the data in data/ and process it into a format that can be used by the pipeline (FAISS vector database)
 import os
-import operator
 import re
 import json
+from copy import deepcopy
+from typing import List, Dict, Iterable
 
-from typing import TypedDict, List, Annotated
-
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AnyMessage
+from langchain_openai import OpenAIEmbeddings
 from langchain_community.document_loaders import (
     TextLoader,
     PyPDFLoader,
@@ -16,18 +13,20 @@ from langchain_community.document_loaders import (
 )
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
 
-def compile_docs(loaders, folder):
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+def compile_docs(loaders, folder: List[Document], doc_type: str):
     for loader in loaders:
-        doc = loader.load()
-        folder.extend(doc)
-        if isinstance(doc, list) and all(isinstance(d, Document) for d in doc):
-            print("\t * Loaded doc from:", doc[0].metadata['source'])
+        documents = loader.load()
+        for doc in documents:
+            doc.metadata = dict(doc.metadata)
+            doc.metadata["doc_type"] = doc_type
+        folder.extend(documents)
+        if isinstance(documents, list) and all(isinstance(d, Document) for d in documents):
+            print("\t * Loaded doc from:", documents[0].metadata["source"])
         else:
-            print("\t * Error loading:", doc[0].metadata['source'])
+            print("\t * Error loading:", documents[0].metadata["source"])
 
 
 class DataLoader():
@@ -35,50 +34,51 @@ class DataLoader():
         self.data_path = data_path
         self.db_path = db_path
         self.loaders = None
-        self.documents = None #TODO: Implement struct
+        self.documents = None
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.schema_version = "retrieval_fidelity_v1"
 
         self.cv_folder_path = os.path.join(data_path, "CVs")
         self.cl_folder_path = os.path.join(data_path, "coverletters")
-        self.tp_folder_path = os.path.join(data_path, "templates")
+        self.notes_folder_path = os.path.join(data_path, "notes")
 
         self.load()
 
     def load(self):
         #TODO: Add JSON parsing?
         if self.loaders is None:
-            cv_loaders = [self.create_loader(pdf, self.cv_folder_path) for pdf in os.listdir(self.cv_folder_path)]
-            cl_loaders = [self.create_loader(pdf, self.cl_folder_path) for pdf in os.listdir(self.cl_folder_path)]
-            tp_loaders = [self.create_loader(pdf, self.tp_folder_path) for pdf in os.listdir(self.tp_folder_path)]
+            cv_loaders = [self.create_loader(f, self.cv_folder_path) for f in os.listdir(self.cv_folder_path)]
+            cl_loaders = [self.create_loader(f, self.cl_folder_path) for f in os.listdir(self.cl_folder_path)]
+            notes_loaders = [self.create_loader(f, self.notes_folder_path) for f in os.listdir(self.notes_folder_path)]
 
             if self.documents is None:
                 self.all_cvs = []
                 self.all_cls = []
-                self.all_tps = []
+                self.all_notes = []
 
             self.documents = [
                 {
-                    "type":"cv",
-                    "loaders":cv_loaders,
-                    "folder":self.all_cvs
+                    "type": "cv",
+                    "loaders": cv_loaders,
+                    "folder": self.all_cvs,
                 },
                 {
-                    "type":"cl",
-                    "loaders":cl_loaders,
-                    "folder":self.all_cls
+                    "type": "cl",
+                    "loaders": cl_loaders,
+                    "folder": self.all_cls,
                 },
                 {
-                    "type":"tp",
-                    "loaders":tp_loaders,
-                    "folder":self.all_tps
+                    "type": "notes",
+                    "loaders": notes_loaders,
+                    "folder": self.all_notes,
                 }
             ]
 
         for cat in self.documents:
-              compile_docs(cat['loaders'], cat['folder'])
+              compile_docs(cat["loaders"], cat["folder"], cat["type"])
 
-        self.all_files = [doc.metadata['source'] for doc in self.all_cvs + self.all_cls + self.all_tps]
+        self.all_files = [doc.metadata["source"] for doc in self.all_cvs + self.all_cls + self.all_notes]
         return
 
     def create_loader(self, filename, folder):
@@ -95,43 +95,128 @@ class DataLoader():
         else:
             raise ValueError(f"Unsupported file type: {ext}")
 
-    def chunk_cv(self,text: str) -> List[str]:
-        # Split into sections by uppercase headers
-        sections = re.split(r"\n(?=[A-Z][A-Z ]{2,})", text)
-        bullets = []
-        for section in sections:
-            sub = re.split(r"[\n•\-]\s+", section.strip())
-            bullets.extend([s.strip() for s in sub if len(s.strip()) > 30])
+    @staticmethod
+    def _sentence_tokenize(text: str) -> List[str]:
+        cleaned = text.replace("\r", " ").strip()
+        if not cleaned:
+            return []
+        sentences = re.split(r"(?<=[.!?])\s+", cleaned)
+        return [s.strip() for s in sentences if len(s.strip()) > 0]
 
-        # Re-chunk for uniform embedding size
+    @staticmethod
+    def _select_overlap(sentences: List[str], overlap_chars: int) -> List[str]:
+        if overlap_chars <= 0:
+            return []
+        acc = 0
+        overlap = []
+        for sentence in reversed(sentences):
+            overlap.insert(0, sentence)
+            acc += len(sentence)
+            if acc >= overlap_chars:
+                break
+        return overlap
+
+    @staticmethod
+    def _chunk_by_sentences(
+        sentences: List[str],
+        max_chars: int,
+        overlap_chars: int,
+    ) -> List[str]:
+        if not sentences:
+            return []
+
+        chunks: List[str] = []
+        current: List[str] = []
+        current_len = 0
+
+        for sentence in sentences:
+            sentence_len = len(sentence) + 1  # account for spacing
+            if current and current_len + sentence_len > max_chars:
+                chunks.append(" ".join(current).strip())
+                overlap_seed = DataLoader._select_overlap(current, overlap_chars)
+                current = overlap_seed.copy()
+                current_len = sum(len(s) + 1 for s in current)
+
+            current.append(sentence)
+            current_len += sentence_len
+
+        if current:
+            chunks.append(" ".join(current).strip())
+
+        return [c for c in chunks if len(c) > 0]
+
+    @staticmethod
+    def _chunk_small(lines: Iterable[str], chunk_size: int, overlap: int) -> List[str]:
+        buffer = []
+        buffer_len = 0
+        chunks: List[str] = []
+
+        for line in lines:
+            normalized = line.strip()
+            if not normalized:
+                continue
+            line_len = len(normalized) + 1
+            if buffer and buffer_len + line_len > chunk_size:
+                chunks.append("\n".join(buffer))
+                # overlap by characters
+                overlap_text = "\n".join(buffer)
+                keep_len = max(0, len(overlap_text) - overlap)
+                buffer = [overlap_text[-keep_len:]] if keep_len else []
+                buffer_len = len("\n".join(buffer))
+
+            buffer.append(normalized)
+            buffer_len += line_len
+
+        if buffer:
+            chunks.append("\n".join(buffer))
+
+        return chunks
+
+    def _default_chunker(self, text: str) -> List[str]:
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
-            separators=["\n", ".", " "],
         )
-        final_chunks = splitter.split_text("\n".join(bullets))
-        return final_chunks
+        return splitter.split_text(text)
 
+    def chunk_cv(self, text: str) -> List[str]:
+        paragraphs = [p for p in text.split("\n\n") if len(p.strip()) > 30]
+        chunks: List[str] = []
+
+        for paragraph in paragraphs:
+            sentences = self._sentence_tokenize(paragraph)
+            chunks.extend(
+                self._chunk_by_sentences(
+                    sentences,
+                    max_chars=1500,
+                    overlap_chars=256,
+                )
+            )
+
+        return chunks or self._default_chunker(text)
 
     def chunk_cover_letter(self, text: str) -> List[str]:
-        paragraphs = [p.strip() for p in text.split("\n\n") if len(p.strip()) > 30]
-        joined = "\n\n".join(paragraphs)
-
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=self.chunk_size,
-            chunk_overlap=self.chunk_overlap,
-            separators=["\n\n", ".", " "],
+        sentences = self._sentence_tokenize(text)
+        chunks = self._chunk_by_sentences(
+            sentences,
+            max_chars=1200,
+            overlap_chars=200,
         )
-        final_chunks = splitter.split_text(joined)
-        return final_chunks
+        return chunks or self._default_chunker(text)
 
-    def chunk_template(self, text: str) -> List[str]:
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=self.chunk_size,
-            chunk_overlap=self.chunk_overlap,
+    def chunk_notes(self, text: str) -> List[str]:
+        lines = text.splitlines()
+        chunks = self._chunk_small(
+            lines,
+            chunk_size=600,
+            overlap=200,
         )
-        final_chunks = splitter.split_text(text)
-        return final_chunks
+        return chunks or self._default_chunker(text)
+
+    @staticmethod
+    def _estimate_token_length(text: str) -> int:
+        # Fallback heuristic: assume ~4 chars per token
+        return max(1, round(len(text) / 4))
 
     def generate_db_metadata(self):
         metadata = {
@@ -139,7 +224,8 @@ class DataLoader():
             "chunk_overlap": self.chunk_overlap,
             "data_path": self.data_path,
             "db_path": self.db_path,
-            "doc_list": self.all_files
+            "doc_list": self.all_files,
+            "schema_version": self.schema_version,
         }
         return metadata
 
@@ -159,11 +245,11 @@ class DataLoader():
 
         return True
 
-
-    def build_vectorstore(self):
+    def build_vectorstore(self, embeddings: OpenAIEmbeddings | None = None):
         print("* Building vectorstore")
         # Create embeddings
-        embeddings = OpenAIEmbeddings(api_key=os.getenv("OPENAI_API_KEY"))
+        if embeddings is None:
+            embeddings = OpenAIEmbeddings(api_key=os.getenv("OPENAI_API_KEY"))
         all_docs = []
 
         # Go through each document type in self.documents, chunking, and adding to the vectorstore
@@ -176,13 +262,25 @@ class DataLoader():
                     chunks = self.chunk_cv(content)
                 elif doc_type == 'cl':
                     chunks = self.chunk_cover_letter(content)
+                elif doc_type == 'notes':
+                    chunks = self.chunk_notes(content)
                 else:
-                    chunks = self.chunk_template(content)
+                    chunks = self._default_chunker(content)
 
-                metadata = doc.metadata
+                metadata = deepcopy(doc.metadata)
+                metadata["doc_type"] = doc_type
+                doc_source = metadata.get("source")
+                metadata["source"] = doc_source
+
                 # Attach metadata to each chunk
                 doc_chunks = [
-                    Document(page_content=chunk, metadata=metadata)
+                    Document(
+                        page_content=chunk,
+                        metadata={
+                            **metadata,
+                            "chunk_length_tokens": self._estimate_token_length(chunk),
+                        }
+                    )
                     for chunk in chunks
                 ]
                 all_docs.extend(doc_chunks)
@@ -200,5 +298,3 @@ class DataLoader():
         print("-- Success")
 
         return vectorstore
-
-
