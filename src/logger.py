@@ -4,8 +4,7 @@ import threading
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-
-class AgentJSONLLogger:
+class JSONLLogger:
     """Simple JSONL logger for agent diagnostics."""
 
     def __init__(self, log_path: str = "logs/agent_runs.jsonl"):
