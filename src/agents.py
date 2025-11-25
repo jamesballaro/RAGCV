@@ -11,101 +11,60 @@ from langchain_core.prompts import (
 from langchain_core.runnables import RunnableParallel
 from langchain_openai import ChatOpenAI
 
-from logger import AgentJSONLLogger
-from utils.context import (
-    ContextAssemblyConfig,
-    assemble_with_token_budget,
-    format_weighted_context,
-)
-
+from .logger import JSONLLogger
 
 class Agent:
     def __init__(
         self,
+        name,
         prompt_path: os.PathLike,
+        system_prompt_path="prompts/system.txt",
         model_name: str = "gpt-5",
         temperature: float = 0.8,
-        retriever=None,
-        tools=None,
-        logger: Optional[AgentJSONLLogger] = None,
-        agent_type: Optional[str] = None,
-        context_config: Optional[ContextAssemblyConfig] = None,
-    ):
+        tools = None,
+        top_p = 1,
+        logger: Optional[JSONLLogger] = None,
+    ):  
+        self.name = name
         self.prompt_path = prompt_path
+        self.system_prompt_path=system_prompt_path
         self.tools = tools or []
-        self.retriever = retriever
         self.chain = None
         self.logger = logger
-        self._last_retrieved_docs: Optional[List[Any]] = None
-        self.agent_type = agent_type
-        self.context_config = context_config or ContextAssemblyConfig()
 
         # Add tools to the LLM
-        self.llm = ChatOpenAI(temperature=temperature, model_name=model_name)
-
+        self.llm = ChatOpenAI(
+            model=model_name,
+            temperature=temperature,
+            top_p=top_p,
+        )
+        
         if self.tools:
             self.llm = self.llm.bind_tools(self.tools)
 
         # Setup the agent
+        self.system_prompt=""
         self.load_system_prompt()
         self.build_prompt_template()
-
-        if not self.chain:
-            if self.retriever is not None:
-                self.build_retrieval_chain()
-            else:
-                self.build_chain()
+        self.build_chain()
 
     def load_system_prompt(self):
-        try:
-            with open(self.prompt_path, "r") as f:
-                self.system_prompt = f.read()
-        except FileNotFoundError:
-            print(f"[Error: System prompt file: {self.prompt_path} not found, agent not specialized.]")
-            self.system_prompt = ""
-            return
+        for path in [self.system_prompt_path, self.prompt_path]:
+            try:
+                with open(path, "r") as f:
+                    self.system_prompt += f.read()
+            except FileNotFoundError:
+                print(f"[Error: System prompt file: {self.prompt_path} not found, agent not specialized.]")
+                return
 
     def build_prompt_template(self):
-        prompt = self.system_prompt
-
-        if self.retriever: prompt += "\n\nContext: {context}"
-
         self.prompt_template = ChatPromptTemplate.from_messages([
-            SystemMessagePromptTemplate.from_template(prompt),
+            SystemMessagePromptTemplate.from_template(self.system_prompt),
             MessagesPlaceholder(variable_name="messages"),
         ])
 
-    def build_retrieval_chain(self):
-        self.chain = (
-            RunnableParallel({
-                "context": lambda x: self.format_docs(
-                    self.retriever.invoke(x["messages"][-1].content)
-                ),
-                "messages": lambda x: x["messages"]
-            })
-            | self.prompt_template
-            | self.llm
-        )
-
     def build_chain(self):
         self.chain = self.prompt_template | self.llm
-
-    def format_docs(self, docs: list) -> str:
-        snippets = assemble_with_token_budget(docs, config=self.context_config)
-        if self.logger is not None:
-            self._last_retrieved_docs = [
-                {
-                    "mode": snippet.mode,
-                    "score": snippet.score,
-                    "tokens": snippet.tokens,
-                    "source": snippet.source,
-                    "doc_type": snippet.doc_type,
-                    "metadata": snippet.metadata,
-                    "text": snippet.text,
-                }
-                for snippet in snippets
-            ]
-        return format_weighted_context(snippets)
 
     def _serialize_message(self, message: BaseMessage) -> dict:
         return {
@@ -129,23 +88,7 @@ class Agent:
 
         serialized_input = [self._serialize_message(msg) for msg in input_messages]
         serialized_output = [self._serialize_message(msg) for msg in output_messages]
-
-        diagnostics = {
-            "prompt_path": self.prompt_path,
-            "uses_retriever": self.retriever is not None,
-        }
         
-        if self._last_retrieved_docs is not None:
-            retriever_config = {}
-            if hasattr(self.retriever, "search_type"):
-                retriever_config["search_type"] = self.retriever.search_type
-            if hasattr(self.retriever, "search_kwargs"):
-                retriever_config["search_kwargs"] = self.retriever.search_kwargs
-            if retriever_config:
-                diagnostics["retriever_config"] = retriever_config
-            diagnostics["retrieved_documents"] = self._last_retrieved_docs
-            self._last_retrieved_docs = None
-
         self.logger.log(
             {
                 "agent_name": getattr(self, "name", self.prompt_path),
@@ -153,63 +96,57 @@ class Agent:
                 "input_messages": serialized_input,
                 "output_messages": serialized_output,
                 "tool_calls": tool_logs,
-                "diagnostics": diagnostics,
             }
         )
 
     def __call__(self, state):
+        print("="*60, "\nAgent called: ", self.prompt_path)
         print("="*60)
-        print("Agent called: ", self.prompt_path)
-        print("="*60)
-        print("")
-        messages = state.get("messages", [])
 
+        messages = state.get("messages", [])
         result = self.chain.invoke({"messages": messages})
         tool_logs = []
 
         # Case 1: Model called a tool
+        tool_messages = []
         if hasattr(result, "tool_calls") and result.tool_calls:
-            tool_messages = []
-            for call in result.tool_calls:
-                tool_name = call["name"]
-                tool_input = call["args"]
-
-                print("-"*60)
-                print("Tool called: ", call["name"],"()")
-                print("-"*60)
-
-                matching_tool = next((t for t in self.tools if t.name == tool_name), None)
-                if not matching_tool:
-                    raise ValueError(f"Tool '{tool_name}' not found in agent's tool list.")
-
-                # Execute the tool and capture output
-                tool_output = matching_tool.invoke(tool_input)
-                tool_messages.append(
-                    ToolMessage(
-                        tool_call_id=call["id"],
-                        content=str(tool_output)
-                    )
-                )
-                tool_logs.append(
-                    {
-                        "tool_name": tool_name,
-                        "args": tool_input,
-                        "output": str(tool_output),
-                    }
-                )
-
-            response_messages = [result] + tool_messages
-            self._log_invocation(
-                input_messages=messages,
-                output_messages=response_messages,
-                tool_logs=tool_logs,
-            )
-            return {"messages": response_messages}
+            tool_messages, tool_logs = process_tool_call(result, self.tools)
+        
+        response_messages = [result] + tool_messages
 
         # Case 2: No tool call
         self._log_invocation(
             input_messages=messages,
-            output_messages=[result],
+            output_messages=response_messages,
             tool_logs=tool_logs,
         )
-        return {"messages": [result]}
+        return {"messages": response_messages}
+
+def process_tool_call(result, tools):
+    tool_messages = []
+    tool_logs = []
+    tool_map = {t.name: t for t in tools}
+
+    for call in result.tool_calls:
+        tool_name = call["name"]
+        tool_input = call["args"]
+
+        print("-"*60,"\nTool called: ", call["name"],"()\n","-"*60)
+
+        matching_tool = tool_map.get(tool_name)
+        if not matching_tool:
+            raise ValueError(f"Tool '{tool_name}' not found in agent's tool list.")
+
+        try:
+            tool_output = matching_tool.invoke(tool_input)
+        except Exception as e:
+            tool_output = f"[Error executing tool: {e}]"
+
+        tool_messages.append(
+            ToolMessage(tool_call_id=call["id"], content=str(tool_output))
+        )
+        tool_logs.append(
+            {"tool_name": tool_name, "args": tool_input, "output": str(tool_output)}
+        )
+
+    return tool_messages, tool_logs
