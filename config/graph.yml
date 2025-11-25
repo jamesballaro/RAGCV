@@ -1,0 +1,35 @@
+agents:
+  - name: Summary_Agent
+    prompt_path: prompts/summary_agent.txt
+    rank: 0
+
+  - name: Router_Agent
+    prompt_path: prompts/router.txt
+    rank: 1
+    conditional_links:
+      - CV_Task_Agent
+      - CL_Task_Agent
+
+  - name: CV_Task_Agent
+    prompt_path: prompts/dummy.txt
+    rank: 2
+    hard_links:
+      - CV_Agent
+
+  - name: CV_Agent
+    prompt_path: prompts/cv_agent.txt
+    rank: 3
+    hard_links:
+      - Router_Agent
+
+  - name: CL_Task_Agent
+    prompt_path: prompts/dummy.txt
+    rank: 2
+    hard_links:
+      - CL_Agent
+
+  - name: CL_Agent
+    prompt_path: prompts/cl_agent.txt
+    rank: 3
+    hard_links:
+      - Router_Agent
