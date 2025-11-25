@@ -2,8 +2,10 @@
 import os
 import re
 import json
+import tiktoken
+
 from copy import deepcopy
-from typing import List, Dict, Iterable
+from typing import List, Optional
 
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.document_loaders import (
@@ -15,19 +17,6 @@ from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
-def compile_docs(loaders, folder: List[Document], doc_type: str):
-    for loader in loaders:
-        documents = loader.load()
-        for doc in documents:
-            doc.metadata = dict(doc.metadata)
-            doc.metadata["doc_type"] = doc_type
-        folder.extend(documents)
-        if isinstance(documents, list) and all(isinstance(d, Document) for d in documents):
-            print("\t * Loaded doc from:", documents[0].metadata["source"])
-        else:
-            print("\t * Error loading:", documents[0].metadata["source"])
-
 
 class DataLoader():
     def __init__(self, data_path: os.PathLike, db_path: os.PathLike, chunk_size: int = 1024, chunk_overlap: int = 256 ):
@@ -46,7 +35,10 @@ class DataLoader():
         self.load()
 
     def load(self):
-        #TODO: Add JSON parsing?
+        # Load the data
+        print("="*60)
+        print("Loading data from files")
+        print("="*60)
         if self.loaders is None:
             cv_loaders = [self.create_loader(f, self.cv_folder_path) for f in os.listdir(self.cv_folder_path)]
             cl_loaders = [self.create_loader(f, self.cl_folder_path) for f in os.listdir(self.cl_folder_path)]
@@ -100,45 +92,36 @@ class DataLoader():
         cleaned = text.replace("\r", " ").strip()
         if not cleaned:
             return []
-        sentences = re.split(r"(?<=[.!?])\s+", cleaned)
+        # more robust splitter
+        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z0-9])', cleaned)
         return [s.strip() for s in sentences if len(s.strip()) > 0]
 
     @staticmethod
-    def _select_overlap(sentences: List[str], overlap_chars: int) -> List[str]:
-        if overlap_chars <= 0:
-            return []
-        acc = 0
-        overlap = []
-        for sentence in reversed(sentences):
-            overlap.insert(0, sentence)
-            acc += len(sentence)
-            if acc >= overlap_chars:
-                break
-        return overlap
+    def _chunk_sentences_token_budget(sentences: List[str], max_tokens: int, overlap_tokens: int) -> List[str]:
+        chunks = []
+        current = []
+        current_tokens = 0
 
-    @staticmethod
-    def _chunk_by_sentences(
-        sentences: List[str],
-        max_chars: int,
-        overlap_chars: int,
-    ) -> List[str]:
-        if not sentences:
-            return []
-
-        chunks: List[str] = []
-        current: List[str] = []
-        current_len = 0
-
-        for sentence in sentences:
-            sentence_len = len(sentence) + 1  # account for spacing
-            if current and current_len + sentence_len > max_chars:
+        for sent in sentences:
+            sent_tokens = token_count(sent)
+            if current and current_tokens + sent_tokens > max_tokens:
                 chunks.append(" ".join(current).strip())
-                overlap_seed = DataLoader._select_overlap(current, overlap_chars)
-                current = overlap_seed.copy()
-                current_len = sum(len(s) + 1 for s in current)
 
-            current.append(sentence)
-            current_len += sentence_len
+                # compute overlap sentences
+                overlap = []
+                overlap_acc = 0
+                for s in reversed(current):
+                    t = token_count(s)
+                    if overlap_acc + t > overlap_tokens:
+                        break
+                    overlap.insert(0, s)
+                    overlap_acc += t
+
+                current = overlap.copy()
+                current_tokens = sum(token_count(s) for s in current)
+
+            current.append(sent)
+            current_tokens += sent_tokens
 
         if current:
             chunks.append(" ".join(current).strip())
@@ -146,31 +129,9 @@ class DataLoader():
         return [c for c in chunks if len(c) > 0]
 
     @staticmethod
-    def _chunk_small(lines: Iterable[str], chunk_size: int, overlap: int) -> List[str]:
-        buffer = []
-        buffer_len = 0
-        chunks: List[str] = []
-
-        for line in lines:
-            normalized = line.strip()
-            if not normalized:
-                continue
-            line_len = len(normalized) + 1
-            if buffer and buffer_len + line_len > chunk_size:
-                chunks.append("\n".join(buffer))
-                # overlap by characters
-                overlap_text = "\n".join(buffer)
-                keep_len = max(0, len(overlap_text) - overlap)
-                buffer = [overlap_text[-keep_len:]] if keep_len else []
-                buffer_len = len("\n".join(buffer))
-
-            buffer.append(normalized)
-            buffer_len += line_len
-
-        if buffer:
-            chunks.append("\n".join(buffer))
-
-        return chunks
+    def _chunk_notes_sentences(text: str, max_tokens: int, overlap_tokens: int) -> List[str]:
+        sentences = DataLoader._sentence_tokenize(text)
+        return DataLoader._chunk_sentences_token_budget(sentences, max_tokens, overlap_tokens)
 
     def _default_chunker(self, text: str) -> List[str]:
         splitter = RecursiveCharacterTextSplitter(
@@ -179,44 +140,81 @@ class DataLoader():
         )
         return splitter.split_text(text)
 
+    @staticmethod
+    def _token_length(text: str) -> int:
+        return token_count(text)
+
+    @staticmethod
+    def _split_bullets(text: str) -> List[str]:
+        lines = text.splitlines()
+        bullets = []
+        current = []
+        for ln in lines:
+            if re.match(r'^(\s*[-•*]|\s*\d+\.)\s+', ln):
+                if current:
+                    bullets.append(" ".join(current).strip())
+                current = [ln.strip()]
+            else:
+                if current:
+                    current.append(ln.strip())
+                else:
+                    current = [ln.strip()]
+        if current:
+            bullets.append(" ".join(current).strip())
+        return [b for b in bullets if len(b) > 0]
+
     def chunk_cv(self, text: str) -> List[str]:
-        paragraphs = [p for p in text.split("\n\n") if len(p.strip()) > 30]
-        chunks: List[str] = []
+        bullets = self._split_bullets(text)
+        if not bullets:
+            return self._default_chunker(text)
 
-        for paragraph in paragraphs:
-            sentences = self._sentence_tokenize(paragraph)
-            chunks.extend(
-                self._chunk_by_sentences(
-                    sentences,
-                    max_chars=1500,
-                    overlap_chars=256,
-                )
-            )
+        max_tokens = 450
+        overlap_tokens = 80
 
-        return chunks or self._default_chunker(text)
+        chunks = []
+        current = []
+        current_tokens = 0
+
+        for b in bullets:
+            bt = token_count(b)
+            if current and current_tokens + bt > max_tokens:
+                chunks.append(" ".join(current).strip())
+
+                # overlap last bullet
+                overlap = []
+                acc = 0
+                for x in reversed(current):
+                    tx = token_count(x)
+                    if acc + tx > overlap_tokens:
+                        break
+                    overlap.insert(0, x)
+                    acc += tx
+
+                current = overlap.copy()
+                current_tokens = sum(token_count(x) for x in current)
+
+            current.append(b)
+            current_tokens += bt
+
+        if current:
+            chunks.append(" ".join(current).strip())
+
+        return chunks
 
     def chunk_cover_letter(self, text: str) -> List[str]:
         sentences = self._sentence_tokenize(text)
-        chunks = self._chunk_by_sentences(
+        return self._chunk_sentences_token_budget(
             sentences,
-            max_chars=1200,
-            overlap_chars=200,
+            max_tokens=450,
+            overlap_tokens=120,
         )
-        return chunks or self._default_chunker(text)
 
     def chunk_notes(self, text: str) -> List[str]:
-        lines = text.splitlines()
-        chunks = self._chunk_small(
-            lines,
-            chunk_size=600,
-            overlap=200,
+        return self._chunk_notes_sentences(
+            text,
+            max_tokens=400,
+            overlap_tokens=120,
         )
-        return chunks or self._default_chunker(text)
-
-    @staticmethod
-    def _estimate_token_length(text: str) -> int:
-        # Fallback heuristic: assume ~4 chars per token
-        return max(1, round(len(text) / 4))
 
     def generate_db_metadata(self):
         metadata = {
@@ -278,7 +276,7 @@ class DataLoader():
                         page_content=chunk,
                         metadata={
                             **metadata,
-                            "chunk_length_tokens": self._estimate_token_length(chunk),
+                            "chunk_length_tokens": token_count(chunk),
                         }
                     )
                     for chunk in chunks
@@ -298,3 +296,47 @@ class DataLoader():
         print("-- Success")
 
         return vectorstore
+
+    def load_vectorstore(self, embeddings):
+        if not self.db_similarity():
+            vectorstore = self.build_vectorstore(embeddings=embeddings)
+        else:
+            print("\n [Corpus unchanged since last build, loading existing vectorstore.]\n")
+            vectorstore = FAISS.load_local(
+                    self.db_path,
+                    embeddings,
+                    allow_dangerous_deserialization=True
+            )
+        return vectorstore
+
+def compile_docs(loaders, folder: List[Document], doc_type: str):
+    for loader in loaders:
+        documents = loader.load()
+        for doc in documents:
+            doc.metadata = dict(doc.metadata)
+            doc.metadata["doc_type"] = doc_type
+        folder.extend(documents)
+        if isinstance(documents, list) and all(isinstance(d, Document) for d in documents):
+            print("\t * Loaded doc from:", documents[0].metadata["source"])
+        else:
+            print("\t * Error loading:", documents[0].metadata["source"])
+
+def _get_encoding(encoding_name: Optional[str] = None):
+    try:
+        if encoding_name:
+            return tiktoken.get_encoding(encoding_name)
+        # Prefer model-based encoding if available; fall back to cl100k_base.
+        try:
+            return tiktoken.encoding_for_model("gpt-4o")
+        except Exception:
+            return tiktoken.get_encoding("cl100k_base")
+    except Exception as e:
+        # If tiktoken fails for any reason, raise an explicit error so caller
+        raise RuntimeError("tiktoken initialisation failed") from e
+
+
+def token_count(text: str, encoding=None) -> int:
+    if not text:
+        return 0
+    enc = encoding or _get_encoding()
+    return len(enc.encode(text))
