@@ -8,14 +8,6 @@ import numpy as np
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 
-
-AGENT_ALLOWED_DOC_TYPES = {
-    "cv": ["cv", "notes"],
-    "cl": ["cl", "cv", "notes"],
-    "summary": ["cv", "cl"],
-}
-
-
 @dataclass
 class AdaptiveRetrieverConfig:
     base_k: int = 10
@@ -25,39 +17,24 @@ class AdaptiveRetrieverConfig:
     min_high_score: int = 3
     dedupe_threshold: float = 0.88
 
-
 class AdaptiveRetriever:
     """Retrieval helper that applies metadata filtering, dedupe, and MMR."""
 
     def __init__(
         self,
-        *,
         vectorstore,
         embeddings: OpenAIEmbeddings,
-        agent_type: Optional[str] = None,
         config: Optional[AdaptiveRetrieverConfig] = None,
     ):
         self.vectorstore = vectorstore
         self.embeddings = embeddings
-        self.agent_type = agent_type or "summary"
         self.config = config or AdaptiveRetrieverConfig()
-        self.search_type = "adaptive_mmr"
-        self.search_kwargs = {
-            "agent_type": self.agent_type,
-            "base_k": self.config.base_k,
-            "mmr_k": self.config.mmr_k,
-            "mmr_lambda": self.config.mmr_lambda,
-            "score_threshold": self.config.score_threshold,
-            "min_high_score": self.config.min_high_score,
-            "dedupe_threshold": self.config.dedupe_threshold,
-        }
 
     def invoke(self, query: str) -> List[Document]:
-        ranked = adaptive_retrieval(
+        ranked = self.adaptive_retrieval(
             query=query,
             vectorstore=self.vectorstore,
             embeddings=self.embeddings,
-            agent_type=self.agent_type,
             config=self.config,
         )
         documents: List[Document] = []
@@ -72,84 +49,57 @@ class AdaptiveRetriever:
             )
         return documents
 
-
-def adaptive_retrieval(
-    *,
-    query: str,
-    vectorstore,
-    embeddings: OpenAIEmbeddings,
-    agent_type: Optional[str],
-    config: AdaptiveRetrieverConfig,
-) -> List[Tuple[Document, float]]:
-    allowed_doc_types = AGENT_ALLOWED_DOC_TYPES.get(agent_type or "", None)
-    candidates = metadata_filtered_retrieval(
-        query=query,
-        vectorstore=vectorstore,
-        allowed_doc_types=allowed_doc_types,
-        k=config.base_k,
-    )
-    candidates = [
-        (doc, float(score))
-        for doc, score in candidates
-        if score is not None and float(score) >= config.score_threshold
-    ]
-
-    if len(candidates) < config.min_high_score:
-        expanded = metadata_filtered_retrieval(
+    def adaptive_retrieval(
+        self,
+        query: str,
+        vectorstore,
+        embeddings: OpenAIEmbeddings,
+        config: AdaptiveRetrieverConfig,
+    ) -> List[Tuple[Document, float]]:
+        candidates = _run_vectorstore_search(
             query=query,
             vectorstore=vectorstore,
-            allowed_doc_types=allowed_doc_types,
-            k=config.base_k * 2,
+            k=config.base_k,
         )
-        merged = {id(doc): (doc, float(score)) for doc, score in candidates}
-        for doc, score in expanded:
-            merged[id(doc)] = (doc, float(score))
-        candidates = list(merged.values())
-        candidates.sort(key=lambda x: x[1], reverse=True)
+        candidates = [
+            (doc, float(score))
+            for doc, score in candidates
+            if score is not None and float(score) >= config.score_threshold
+        ]
 
-    if not candidates:
-        return []
+        if len(candidates) < config.min_high_score:
+            expanded = _run_vectorstore_search(
+                query=query,
+                vectorstore=vectorstore,
+                k=config.base_k * 2,
+            )
+            merged = {id(doc): (doc, float(score)) for doc, score in candidates}
+            for doc, score in expanded:
+                merged[id(doc)] = (doc, float(score))
+            candidates = list(merged.values())
+            candidates.sort(key=lambda x: x[1], reverse=True)
 
-    deduped = deduplicate_chunks(
-        candidates,
-        embeddings=embeddings,
-        sim_threshold=config.dedupe_threshold,
-    )
-    if not deduped:
-        return []
+        if not candidates:
+            return []
 
-    selected = mmr_selection(
-        deduped,
-        embeddings=embeddings,
-        mmr_k=config.mmr_k,
-        mmr_lambda=config.mmr_lambda,
-    )
-    return selected
+        deduped = deduplicate_chunks(
+            candidates,
+            embeddings=embeddings,
+            sim_threshold=config.dedupe_threshold,
+        )
+        if not deduped:
+            return []
 
-
-def metadata_filtered_retrieval(
-    *,
-    query: str,
-    vectorstore,
-    allowed_doc_types: Optional[Sequence[str]],
-    k: int,
-) -> List[Tuple[Document, float]]:
-    raw_results = _run_vectorstore_search(vectorstore, query, k)
-    if not allowed_doc_types:
-        return raw_results
-
-    allowed = set(allowed_doc_types)
-    filtered = [
-        (doc, score)
-        for doc, score in raw_results
-        if doc.metadata.get("doc_type") in allowed
-    ]
-    return filtered
-
+        selected = mmr_selection(
+            deduped,
+            embeddings=embeddings,
+            mmr_k=config.mmr_k,
+            mmr_lambda=config.mmr_lambda,
+        )
+        return selected
 
 def deduplicate_chunks(
     candidates: List[Tuple[Document, float]],
-    *,
     embeddings: OpenAIEmbeddings,
     sim_threshold: float,
 ) -> List[Tuple[Document, float]]:
@@ -177,10 +127,8 @@ def deduplicate_chunks(
 
     return kept
 
-
 def mmr_selection(
     candidates: List[Tuple[Document, float]],
-    *,
     embeddings: OpenAIEmbeddings,
     mmr_k: int,
     mmr_lambda: float,
@@ -213,12 +161,10 @@ def mmr_selection(
 
     return [candidates[i] for i in selected_indices]
 
-
 def embed_batch(texts: Sequence[str], embeddings: OpenAIEmbeddings) -> List[List[float]]:
     if not texts:
         return []
     return embeddings.embed_documents(list(texts))
-
 
 def cos_sim(vec_a: Sequence[float], vec_b: Sequence[float]) -> float:
     a = np.array(vec_a)
@@ -227,7 +173,6 @@ def cos_sim(vec_a: Sequence[float], vec_b: Sequence[float]) -> float:
     if denom == 0:
         return 0.0
     return float(np.dot(a, b) / denom)
-
 
 def _run_vectorstore_search(vectorstore, query: str, k: int):
     if hasattr(vectorstore, "similarity_search_with_relevance_scores"):
@@ -242,4 +187,3 @@ def _run_vectorstore_search(vectorstore, query: str, k: int):
             score = 1 / (1 + float(distance))
         normalized.append((doc, score))
     return normalized
-
