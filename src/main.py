@@ -8,13 +8,15 @@ from datetime import datetime as dt
 from langchain_core.messages import HumanMessage
 from langchain_community.vectorstores import FAISS
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain.tools import tool
+
 from dotenv import load_dotenv
 from functools import partial
 
 
 from .loader import DataLoader
 from .graph import RouterGraph
-from .tools import write_to_file
+from .tools import build_registry
 from .utils.logger import JSONLLogger
 from .utils.enricher import QueryEnricher
 from .utils.retrieval import AdaptiveRetriever
@@ -44,9 +46,7 @@ def main():
     enricher = QueryEnricher(retriever=retriever,logger=logger)
 
     # Set up the tools to pass to agents
-    tools_list = [
-        partial(write_to_file, test_name=f"{args.test_name}")
-    ]
+    tools_list = build_registry(test_name=args.test_name)
 
     # Construct agent objects using Pydantic type enforcing
     agents = load_from_yaml(
