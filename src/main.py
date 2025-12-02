@@ -9,11 +9,13 @@ from langchain_core.messages import HumanMessage
 from langchain_community.vectorstores import FAISS
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from dotenv import load_dotenv
+from functools import partial
+
 
 from .loader import DataLoader
 from .graph import RouterGraph
 from .tools import write_to_file
-from .logger import JSONLLogger
+from .utils.logger import JSONLLogger
 from .utils.enricher import QueryEnricher
 from .utils.retrieval import AdaptiveRetriever
 from .spec.loader import load_from_yaml
@@ -43,7 +45,7 @@ def main():
 
     # Set up the tools to pass to agents
     tools_list = [
-        write_to_file
+        partial(write_to_file, test_name=f"{args.test_name}")
     ]
 
     # Construct agent objects using Pydantic type enforcing
@@ -54,7 +56,7 @@ def main():
     )
 
     # Construct graph
-    graph = RouterGraph(agents=agents)
+    graph = RouterGraph(agents=agents, logger=logger)
 
     with open("input/query.txt", "r") as f:
         query = f.read()
