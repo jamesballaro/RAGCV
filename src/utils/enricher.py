@@ -4,9 +4,10 @@ from typing import List, Optional, Any
 
 import numpy as np
 from langchain_core.documents import Document
+from dataclasses import asdict
 
 from .retrieval import AdaptiveRetriever
-from ..logger import JSONLLogger
+from .logger import JSONLLogger
 
 class QueryEnricher():
     def __init__(
@@ -40,16 +41,11 @@ class QueryEnricher():
     
     def log_invocation(self):
         diagnostics = {}
-        if self.retrieved_docs is not None:
-            retriever_config = {}
-        if hasattr(self.retriever, "search_type"):
-            retriever_config["search_type"] = self.retriever.search_type
-        if hasattr(self.retriever, "search_kwargs"):
-            retriever_config["search_kwargs"] = self.retriever.search_kwargs
-        if retriever_config:
-            diagnostics["retriever_config"] = retriever_config
 
+        diagnostics["retriever_config"] = asdict(self.retriever.config)
+        # Log retrieved docs (if any)
         diagnostics["retrieved_documents"] = self.retrieved_docs
+
         self.retrieved_docs = None
         self.logger.log(
             {
