@@ -6,6 +6,7 @@ from typing import TypedDict, List, Annotated
 from langchain_core.messages import  AnyMessage
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
+from .utils.logger import JSONLLogger
 class RouterGraphState(TypedDict):
     messages: Annotated[List[AnyMessage], operator.add]
 
@@ -16,8 +17,9 @@ class RouterGraph:
     - If a conditional link is specified the graph will add a conditional edge between the link given 
         and all other nodes in the next ranks
     """
-    def __init__(self, agents = []):
+    def __init__(self, agents, logger: JSONLLogger):
         self.agents = agents
+        self.logger = logger
 
         self.max_rank = max(agent['rank'] for agent in self.agents)
         self.min_rank = min(agent['rank'] for agent in self.agents)
@@ -25,7 +27,7 @@ class RouterGraph:
         self.agent_map = {agent['name']: agent for agent in self.agents} | {'END': END}
         self.hierarchy = {
             rank: {'names': [], 'nodes': []}
-            for rank in range(self.min_rank,self.max_rank +1)
+            for rank in range(self.min_rank, self.max_rank +1)
         }
         self.agent_names = [agent["name"] for agent in agents]
         self.execution_log = []
@@ -39,7 +41,6 @@ class RouterGraph:
             self.hierarchy[rank]['names'].append(agent['name'])
             self.hierarchy[rank]['nodes'].append(agent['node'])
             self.graph.add_node(agent['name'], agent['node'])
-
 
         self.graph.set_entry_point(self.hierarchy[self.min_rank]['names'][0])
 
@@ -124,6 +125,7 @@ class RouterGraph:
         pathway = last_message.content
 
         if pathway == "END":
+            self.logger.log_conversation(state["messages"])
             return "END"
 
         # Handle invalid pathway:
@@ -136,12 +138,12 @@ class RouterGraph:
             runs[entry['agent']] += 1
 
         # TODO: Fix this hacky solution to prevent infinite loops
-        if runs.get(pathway, 0) >= 2:
-            print(f"[Error: Detected potential infinite loop with pathway: {pathway}]\n \t[Loop forcibly terminated.]")
+        if runs.get(pathway, 0) >= 3:
+            print(f"[Error: Detected potential infinite loop with pathway: {pathway}]\n\t[Loop forcibly terminated.]")
             return "END"
 
         return pathway
-
+            
     def get_execution_summary(self):
         if not self.execution_log:
             return "No agents were executed."

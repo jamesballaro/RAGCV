@@ -11,7 +11,7 @@ from langchain_core.prompts import (
 from langchain_core.runnables import RunnableParallel
 from langchain_openai import ChatOpenAI
 
-from .logger import JSONLLogger
+from .utils.logger import JSONLLogger
 
 class Agent:
     def __init__(
@@ -53,8 +53,9 @@ class Agent:
             try:
                 with open(path, "r") as f:
                     self.system_prompt += f.read()
+                    
             except FileNotFoundError:
-                print(f"[Error: System prompt file: {self.prompt_path} not found, agent not specialized.]")
+                print(f"[Error: System prompt file: {self.prompt_path} not found, {self.name} not specialized.]\n")
                 return
 
     def build_prompt_template(self):
@@ -66,42 +67,8 @@ class Agent:
     def build_chain(self):
         self.chain = self.prompt_template | self.llm
 
-    def _serialize_message(self, message: BaseMessage) -> dict:
-        return {
-            "type": message.__class__.__name__,
-            "content": getattr(message, "content", None),
-            "name": getattr(message, "name", None),
-            "tool_calls": getattr(message, "tool_calls", []),
-            "additional_kwargs": getattr(message, "additional_kwargs", {}),
-            "response_metadata": getattr(message, "response_metadata", {}),
-        }
-
-    def _log_invocation(
-        self,
-        *,
-        input_messages: List[AnyMessage],
-        output_messages: List[AnyMessage],
-        tool_logs: List[dict],
-    ) -> None:
-        if self.logger is None:
-            return
-
-        serialized_input = [self._serialize_message(msg) for msg in input_messages]
-        serialized_output = [self._serialize_message(msg) for msg in output_messages]
-        
-        self.logger.log(
-            {
-                "agent_name": getattr(self, "name", self.prompt_path),
-                "event": "agent_invocation",
-                "input_messages": serialized_input,
-                "output_messages": serialized_output,
-                "tool_calls": tool_logs,
-            }
-        )
-
     def __call__(self, state):
-        print("="*60, "\nAgent called: ", self.prompt_path)
-        print("="*60)
+        print(f'{"="*60}\nAgent called: {self.name}\n{"="*60}')
 
         messages = state.get("messages", [])
         result = self.chain.invoke({"messages": messages})
@@ -112,14 +79,21 @@ class Agent:
         if hasattr(result, "tool_calls") and result.tool_calls:
             tool_messages, tool_logs = process_tool_call(result, self.tools)
         
+        # Add agent name to message
+        agent_name = getattr(self, "name", self.prompt_path)
+
+        if hasattr(result, "additional_kwargs") and isinstance(result.additional_kwargs, dict):
+            result.additional_kwargs["agent_name"] = agent_name
+
         response_messages = [result] + tool_messages
 
-        # Case 2: No tool call
-        self._log_invocation(
-            input_messages=messages,
-            output_messages=response_messages,
-            tool_logs=tool_logs,
-        )
+        if self.logger is not None:     
+            self.logger.log_agent_invocation(
+                agent_name=agent_name,
+                input_messages=messages,
+                output_messages=response_messages,
+                tool_logs=tool_logs,
+            )
         return {"messages": response_messages}
 
 def process_tool_call(result, tools):
@@ -131,7 +105,7 @@ def process_tool_call(result, tools):
         tool_name = call["name"]
         tool_input = call["args"]
 
-        print("-"*60,"\nTool called: ", call["name"],"()\n","-"*60)
+        print(f'{"-"*60}\nTool called: {call["name"]}()\n{"-"*60}')
 
         matching_tool = tool_map.get(tool_name)
         if not matching_tool:
