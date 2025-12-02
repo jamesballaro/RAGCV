@@ -2,10 +2,9 @@
 import os
 import re
 import json
-import tiktoken
 
 from copy import deepcopy
-from typing import List, Optional
+from typing import List
 
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.document_loaders import (
@@ -16,7 +15,13 @@ from langchain_community.document_loaders import (
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from .utils.chunking import (
+    token_count, 
+    chunk_cover_letter, 
+    chunk_cv, 
+    chunk_notes, 
+    default_chunker
+)
 
 class DataLoader():
     def __init__(self, data_path: os.PathLike, db_path: os.PathLike, chunk_size: int = 1024, chunk_overlap: int = 256 ):
@@ -87,135 +92,6 @@ class DataLoader():
         else:
             raise ValueError(f"Unsupported file type: {ext}")
 
-    @staticmethod
-    def _sentence_tokenize(text: str) -> List[str]:
-        cleaned = text.replace("\r", " ").strip()
-        if not cleaned:
-            return []
-        # more robust splitter
-        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z0-9])', cleaned)
-        return [s.strip() for s in sentences if len(s.strip()) > 0]
-
-    @staticmethod
-    def _chunk_sentences_token_budget(sentences: List[str], max_tokens: int, overlap_tokens: int) -> List[str]:
-        chunks = []
-        current = []
-        current_tokens = 0
-
-        for sent in sentences:
-            sent_tokens = token_count(sent)
-            if current and current_tokens + sent_tokens > max_tokens:
-                chunks.append(" ".join(current).strip())
-
-                # compute overlap sentences
-                overlap = []
-                overlap_acc = 0
-                for s in reversed(current):
-                    t = token_count(s)
-                    if overlap_acc + t > overlap_tokens:
-                        break
-                    overlap.insert(0, s)
-                    overlap_acc += t
-
-                current = overlap.copy()
-                current_tokens = sum(token_count(s) for s in current)
-
-            current.append(sent)
-            current_tokens += sent_tokens
-
-        if current:
-            chunks.append(" ".join(current).strip())
-
-        return [c for c in chunks if len(c) > 0]
-
-    @staticmethod
-    def _chunk_notes_sentences(text: str, max_tokens: int, overlap_tokens: int) -> List[str]:
-        sentences = DataLoader._sentence_tokenize(text)
-        return DataLoader._chunk_sentences_token_budget(sentences, max_tokens, overlap_tokens)
-
-    def _default_chunker(self, text: str) -> List[str]:
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=self.chunk_size,
-            chunk_overlap=self.chunk_overlap,
-        )
-        return splitter.split_text(text)
-
-    @staticmethod
-    def _token_length(text: str) -> int:
-        return token_count(text)
-
-    @staticmethod
-    def _split_bullets(text: str) -> List[str]:
-        lines = text.splitlines()
-        bullets = []
-        current = []
-        for ln in lines:
-            if re.match(r'^(\s*[-•*]|\s*\d+\.)\s+', ln):
-                if current:
-                    bullets.append(" ".join(current).strip())
-                current = [ln.strip()]
-            else:
-                if current:
-                    current.append(ln.strip())
-                else:
-                    current = [ln.strip()]
-        if current:
-            bullets.append(" ".join(current).strip())
-        return [b for b in bullets if len(b) > 0]
-
-    def chunk_cv(self, text: str) -> List[str]:
-        bullets = self._split_bullets(text)
-        if not bullets:
-            return self._default_chunker(text)
-
-        max_tokens = 450
-        overlap_tokens = 80
-
-        chunks = []
-        current = []
-        current_tokens = 0
-
-        for b in bullets:
-            bt = token_count(b)
-            if current and current_tokens + bt > max_tokens:
-                chunks.append(" ".join(current).strip())
-
-                # overlap last bullet
-                overlap = []
-                acc = 0
-                for x in reversed(current):
-                    tx = token_count(x)
-                    if acc + tx > overlap_tokens:
-                        break
-                    overlap.insert(0, x)
-                    acc += tx
-
-                current = overlap.copy()
-                current_tokens = sum(token_count(x) for x in current)
-
-            current.append(b)
-            current_tokens += bt
-
-        if current:
-            chunks.append(" ".join(current).strip())
-
-        return chunks
-
-    def chunk_cover_letter(self, text: str) -> List[str]:
-        sentences = self._sentence_tokenize(text)
-        return self._chunk_sentences_token_budget(
-            sentences,
-            max_tokens=450,
-            overlap_tokens=120,
-        )
-
-    def chunk_notes(self, text: str) -> List[str]:
-        return self._chunk_notes_sentences(
-            text,
-            max_tokens=400,
-            overlap_tokens=120,
-        )
-
     def generate_db_metadata(self):
         metadata = {
             "chunk_size": self.chunk_size,
@@ -257,13 +133,13 @@ class DataLoader():
             for doc in docs['folder']:
                 content = doc.page_content
                 if doc_type == 'cv':
-                    chunks = self.chunk_cv(content)
+                    chunks = chunk_cv(content)
                 elif doc_type == 'cl':
-                    chunks = self.chunk_cover_letter(content)
+                    chunks = chunk_cover_letter(content)
                 elif doc_type == 'notes':
-                    chunks = self.chunk_notes(content)
+                    chunks = chunk_notes(content)
                 else:
-                    chunks = self._default_chunker(content)
+                    chunks = default_chunker(content)
 
                 metadata = deepcopy(doc.metadata)
                 metadata["doc_type"] = doc_type
@@ -301,7 +177,7 @@ class DataLoader():
         if not self.db_similarity():
             vectorstore = self.build_vectorstore(embeddings=embeddings)
         else:
-            print("\n [Corpus unchanged since last build, loading existing vectorstore.]\n")
+            print("\n[Corpus unchanged since last build, loading existing vectorstore.]\n")
             vectorstore = FAISS.load_local(
                     self.db_path,
                     embeddings,
@@ -321,22 +197,3 @@ def compile_docs(loaders, folder: List[Document], doc_type: str):
         else:
             print("\t * Error loading:", documents[0].metadata["source"])
 
-def _get_encoding(encoding_name: Optional[str] = None):
-    try:
-        if encoding_name:
-            return tiktoken.get_encoding(encoding_name)
-        # Prefer model-based encoding if available; fall back to cl100k_base.
-        try:
-            return tiktoken.encoding_for_model("gpt-4o")
-        except Exception:
-            return tiktoken.get_encoding("cl100k_base")
-    except Exception as e:
-        # If tiktoken fails for any reason, raise an explicit error so caller
-        raise RuntimeError("tiktoken initialisation failed") from e
-
-
-def token_count(text: str, encoding=None) -> int:
-    if not text:
-        return 0
-    enc = encoding or _get_encoding()
-    return len(enc.encode(text))
