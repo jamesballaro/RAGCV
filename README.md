@@ -37,7 +37,7 @@ export LANGCHAIN_TRACING_V2="false"
 5. Customize system prompts (optional) in the prompts/ folder.
 
 ## Running the Pipeline
-python3 src/main.py
+python -m src.main --test_name [Optional]
 
 - The pipeline will load documents, build a vectorstore (or reuse an existing one), and invoke the agent graph to produce tailored outputs.
 - Results are written to the output/ folder.
@@ -51,11 +51,6 @@ python3 src/main.py
 - **Deduplication**: Near-duplicate chunks are removed before prompting, and each context line is annotated with `[source | doc_type | score]`.
 - **Score-Aware Prompts**: Agents can reason about retrieval confidence (e.g., the CL agent deprioritizes chunks with a score below `0.30`).
 - **Vectorstore Schema Versioning**: Automatic rebuilds ensure metadata stays aligned with the retrieval strategy.
-
-## Context Assembly Improvements
-- **Token-Budget Enforcement**: A configurable assembler keeps the prompt under ~6K context tokens by keeping the top-N raw chunks and summarizing lower-ranked ones.
-- **Hierarchical Evidence**: Raw entries mark high-confidence passages; summarized entries preserve additional coverage without blowing the budget.
-- **Weighted Injection**: Agents now receive a `Context (most relevant first)` block with explicit `[score=… type=… doc_type=…]` markers and instructions to treat low scores as low-confidence.
 
 ## Architecture Overview
 
