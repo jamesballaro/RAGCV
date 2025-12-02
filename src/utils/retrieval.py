@@ -14,7 +14,7 @@ class AdaptiveRetrieverConfig:
     mmr_k: int = 5
     mmr_lambda: float = 0.6
     score_threshold: float = 0.15
-    min_high_score: int = 3
+    min_high_score: int = 5
     dedupe_threshold: float = 0.88
 
 class AdaptiveRetriever:
