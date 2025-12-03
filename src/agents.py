@@ -18,7 +18,7 @@ class Agent:
         self,
         name,
         prompt_path: os.PathLike,
-        system_prompt_path="prompts/system.txt",
+        system_prompt_path="prompts/sys/system.txt",
         model_name: str = "gpt-5",
         temperature: float = 0.8,
         tools = None,
@@ -55,7 +55,7 @@ class Agent:
                     self.system_prompt += f.read()
                     
             except FileNotFoundError:
-                print(f"[Error: System prompt file: {self.prompt_path} not found, {self.name} not specialized.]\n")
+                print(f"[Error: System prompt file: {path} not found, {self.name} not specialized.]\n")
                 return
 
     def build_prompt_template(self):
