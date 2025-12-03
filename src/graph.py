@@ -138,7 +138,7 @@ class RouterGraph:
             runs[entry['agent']] += 1
 
         # TODO: Fix this hacky solution to prevent infinite loops
-        if runs.get(pathway, 0) >= 3:
+        if runs.get(pathway, 0) >= 2:
             print(f"[Error: Detected potential infinite loop with pathway: {pathway}]\n\t[Loop forcibly terminated.]")
             return "END"
 

@@ -7,11 +7,9 @@ from datetime import datetime as dt
 
 from langchain_core.messages import HumanMessage
 from langchain_community.vectorstores import FAISS
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain.tools import tool
+from langchain_openai import OpenAIEmbeddings
 
 from dotenv import load_dotenv
-from functools import partial
 
 
 from .loader import DataLoader
