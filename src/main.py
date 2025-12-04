@@ -61,7 +61,7 @@ def main():
 
     message = enricher.enrich_with_context(query)
 
-    graph.draw() # Optional obviously
+    graph.draw() # Optional
     
     graph.invoke({'messages' : [HumanMessage(content=message)]})
 
