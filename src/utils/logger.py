@@ -15,6 +15,10 @@ class JSONLLogger:
         log_dir = os.path.dirname(log_path)
         if log_dir and not os.path.exists(log_dir):
             os.makedirs(log_dir, exist_ok=True)
+        # Check if log file exists, if so, empty it
+        if os.path.exists(self.log_path):
+            with open(self.log_path, "w", encoding="utf-8") as log_file:
+                pass  # This will empty the file
 
     def log(self, payload: Dict[str, Any]) -> None:
         """Write a payload as a JSON line with timestamp metadata."""

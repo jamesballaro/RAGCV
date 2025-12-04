@@ -41,9 +41,11 @@ class DataLoader():
 
     def load(self):
         # Load the data
-        print("="*60)
-        print("Loading data from files")
-        print("="*60)
+        num_files = 0
+        for folder in [self.cv_folder_path, self.cl_folder_path, self.notes_folder_path]:
+            if os.path.exists(folder):
+                num_files += len([f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))])
+        print(f"{'='*60}\nLoading data from {num_files} files\n{'='*60}")
         if self.loaders is None:
             cv_loaders = [self.create_loader(f, self.cv_folder_path) for f in os.listdir(self.cv_folder_path)]
             cl_loaders = [self.create_loader(f, self.cl_folder_path) for f in os.listdir(self.cl_folder_path)]

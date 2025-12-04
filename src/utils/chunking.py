@@ -66,10 +66,10 @@ def chunk_notes_sentences(text: str, max_tokens: int, overlap_tokens: int) -> Li
     sentences = sentence_tokenize(text)
     return chunk_sentences_token_budget(sentences, max_tokens, overlap_tokens)
 
-def default_chunker(self, text: str) -> List[str]:
+def default_chunker(text: str, chunk_size: int = 1024, chunk_overlap: int = 256) -> List[str]:
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=self.chunk_size,
-        chunk_overlap=self.chunk_overlap,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
     )
     return splitter.split_text(text)
 
@@ -94,13 +94,10 @@ def split_bullets(text: str) -> List[str]:
         bullets.append(" ".join(current).strip())
     return [b for b in bullets if len(b) > 0]
 
-def chunk_cv(self, text: str) -> List[str]:
-    bullets = self._split_bullets(text)
+def chunk_cv(text: str, max_tokens: int = 450, overlap_tokens: int = 80) -> List[str]:
+    bullets = split_bullets(text)
     if not bullets:
-        return self._default_chunker(text)
-
-    max_tokens = 450
-    overlap_tokens = 80
+        return default_chunker(text)
 
     chunks = []
     current = []
@@ -132,17 +129,17 @@ def chunk_cv(self, text: str) -> List[str]:
 
     return chunks
 
-def chunk_cover_letter(self, text: str) -> List[str]:
-    sentences = self._sentence_tokenize(text)
-    return self._chunk_sentences_token_budget(
+def chunk_cover_letter(text: str, max_tokens: int = 450, overlap_tokens: int = 120) -> List[str]:
+    sentences = sentence_tokenize(text)
+    return chunk_sentences_token_budget(
         sentences,
-        max_tokens=450,
-        overlap_tokens=120,
+        max_tokens=max_tokens,
+        overlap_tokens=overlap_tokens,
     )
 
-def chunk_notes(self, text: str) -> List[str]:
-    return self._chunk_notes_sentences(
+def chunk_notes(text: str, max_tokens: int = 400, overlap_tokens: int = 120) -> List[str]:
+    return chunk_notes_sentences(
         text,
-        max_tokens=400,
-        overlap_tokens=120,
+        max_tokens=max_tokens,
+        overlap_tokens=overlap_tokens,
     )
