@@ -15,6 +15,7 @@ def load_from_yaml(path, tools, logger):
             prompt_path=spec.prompt_path,
             logger=logger,
             tools=tools,
+            temperature=spec.temperature if hasattr(spec, 'temperature') else None,
         )
 
         entry = {

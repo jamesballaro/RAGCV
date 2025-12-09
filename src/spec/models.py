@@ -5,8 +5,15 @@ class AgentSpec(BaseModel):
     name: str
     prompt_path: str
     rank: int
+    temperature: Optional[float] = 0.8
     conditional_links: Optional[List[str]] = None
     hard_links: Optional[List[str]] = None
+
+    @field_validator("temperature")
+    def check_temperature_range(cls, v):
+        if v is not None and not (0 <= v <= 1):
+            raise ValueError("temperature must be between 0 and 1")
+        return v
 
     @field_validator("conditional_links", "hard_links")
     def empty_list_to_none(cls, v):
