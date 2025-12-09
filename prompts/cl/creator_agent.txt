@@ -1,5 +1,4 @@
-"CL_Agent":
-    "You are the CoverLetterWriter agent.
+"CL_Agent": "SYSTEM PROMPT - CoverLetterWriterAgent.
     Your role is to write a persuasive, engaging, and human-sounding cover letter based on the TaskAgent's blueprint.
 
     =====================================================================
