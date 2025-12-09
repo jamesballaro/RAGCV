@@ -1,0 +1,38 @@
+JOB DESCRIPTION
+
+Position at DNEG
+Brahma is a pioneering company developing AI-native products built to help enterprises and creators innovate at scale. Brahma enables teams to break creative bottlenecks, accelerate storytelling, and deliver standout content with speed and efficiency. Part of the DNEG Group, Brahma brings together Hollywood’s leading creative technologists, innovators in AI and Generative AI, and thought leaders in the ethical creation of AI content.
+ 
+We are seeking a Machine Learning Researcher to join our team and help advance the state of the art in human-centric generative video models. Your work will focus on improving expression control, lip synchronisation, and overall realism in models such as WAN and Hunyuan. You’ll collaborate with a world-class team of researchers and engineers to build systems that can generate lifelike talking-head videos from text, audio, or motion signals—pushing the boundaries of neural rendering and avatar animation.
+ 
+Key Responsibilities
+Research and develop cutting-edge generative video models, with a focus on controllable facial expression, head motion, and audio-driven lip synchronisation.
+Fine-tune and extend video diffusion models such as WAN and Hunyuan for better visual realism and audio-visual alignment.
+Design robust training pipelines and large-scale video/audio datasets tailored for talking-head synthesis.
+Explore techniques for controllable expression editing, multi-view consistency, and high-fidelity lip sync from speech or text prompts.
+Work closely with product and creative teams to ensure models meet quality and production constraints.
+Stay current with the latest research in video generation, speech-driven animation, and 3D-aware neural rendering.
+ 
+Must Haves
+Strong background in machine learning and deep learning, especially in generative models for video, vision, or speech.
+Hands-on experience with video synthesis tasks such as face reenactment, lip sync, audio-to-video generation, or avatar animation. 
+Proficient in Python and PyTorch; familiar with libraries like MMPose, MediaPipe, DLIB, or image/video generation frameworks.
+Experience training large models and working with high-resolution audio/video datasets.
+Deep understanding of architectures such as transformers, diffusion models, GANs and motion representation techniques.
+Proven ability to work independently and drive research from idea to implementation.
+Strong problem-solving skills, ability to work autonomously in a remote-first environment.
+ 
+Nice to Have
+PhD in Computer Vision, Machine Learning, or a related field, with publications in top-tier conferences (CVPR, ICCV, ICLR, NeurIPS, etc.).
+Familiarity with or contributions to open-source projects in lip sync, video generation, or 3D face modelling.
+Experience with real-time inference, model optimisation, or deployment for production applications.
+Knowledge of adjacent areas like emotion modelling, multimodal learning, or audio-driven animation.
+Experience working with or adapting models like WAN, Hunyuan or similar.
+
+About Us
+We are DNEG, one of the world’s leading visual effects and animation companies for the creation of award-winning feature film, television, and multiplatform content. We employ more than 9,000 people with worldwide offices and studios across North America (Los Angeles, Montréal, Toronto, Vancouver), Europe (London), Asia (Bangalore, Mohali, Chennai, Mumbai) and Australia (Sydney).
+
+At DNEG, we fundamentally believe that embracing our differences is a vital component of our collective success. We are committed to creating an equitable, diverse and inclusive work environment for our global teams, where everyone feels they matter and belong. We welcome and encourage applications from all, regardless of background, experience or disability. Please let us know if you need any adjustments or support during the application process, we will do our best to accommodate your needs. We look forward to meeting you!
+
+User Query:
+1. write a cover letter tailoring my experience in the context to the above job Description (cl_agent)

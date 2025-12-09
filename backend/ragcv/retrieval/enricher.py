@@ -7,7 +7,7 @@ from langchain_core.documents import Document
 from dataclasses import asdict
 
 from .retrieval import AdaptiveRetriever
-from .logger import JSONLLogger
+from ..utils.logger import JSONLLogger
 
 class QueryEnricher():
     def __init__(

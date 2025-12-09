@@ -14,10 +14,10 @@ from dotenv import load_dotenv
 
 from .loader import DataLoader
 from .graph import RouterGraph
-from .tools import build_registry
+from .tools.tools import build_registry
 from .utils.logger import JSONLLogger
-from .utils.enricher import QueryEnricher
-from .utils.retrieval import AdaptiveRetriever
+from .retrieval.enricher import QueryEnricher
+from .retrieval.retrieval import AdaptiveRetriever
 from .spec.loader import load_from_yaml
 
 def main():

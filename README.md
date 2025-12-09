@@ -61,26 +61,37 @@ python -m src.main --test_name [Optional]
 
 ## File Structure
 ```
-data/                  # Input documents
+data/                   # Input documents (CVs, cover letters, templates)
 ├── CVs/
 ├── coverletters/
 └── templates/
 
 input/
-└── query.txt           # Job description or prompt
+└── query.txt           # Job description or prompt for the pipeline
 
-output/                # Generated CV/cover letters
+output/                 # Generated CVs, cover letters, and related outputs
 
-prompts/               # Agent system prompts
+prompts/                # System and agent prompt templates
 
 src/
-├── main.py             # Entry point
-├── loader.py           # Data loading & chunking
-├── graph.py            # Agent graph
-├── agents.py           # Agent definitions
-└── tools.py            # Utility tools
+├── main.py             # Pipeline entry point
+├── loader.py           # Document loading & chunking logic
+├── graph.py            # Agent graph & routing
+├── agents.py           # Agent class definitions
+├── tools.py            # Custom tool (e.g., write_to_file)
+├── spec/               # YAML loader and spec-related utilities
+│   └── loader.py
+└── utils/              # Utility modules
+    ├── logger.py
+    ├── enricher.py
+    └── retrieval.py
 
-environment.yml        # Conda environment
+environment.yml         # Conda environment config
+logs/                   # Agent run logs (created at runtime)
+img/                    # Visualization outputs (e.g., graph.png)
+config/
+└── graph.yml           # Agent/graph YAML config
+test/                   # Example/test prompt files (optional)
 ```
 
 ## Notes
