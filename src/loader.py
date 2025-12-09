@@ -122,7 +122,8 @@ class DataLoader():
         return True
 
     def build_vectorstore(self, embeddings: OpenAIEmbeddings | None = None):
-        print("* Building vectorstore")
+        print(f"{'='*60}\nBuilding Vectorstore")
+
         # Create embeddings
         if embeddings is None:
             embeddings = OpenAIEmbeddings(api_key=os.getenv("OPENAI_API_KEY"))
@@ -171,7 +172,7 @@ class DataLoader():
         with open(metadata_path, "w", encoding="utf-8") as f:
             json.dump(db_metadata, f, indent=4)
 
-        print("-- Success")
+        print("-- Success\n","="*60)
 
         return vectorstore
 
