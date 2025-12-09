@@ -19,7 +19,7 @@ class Agent:
         name,
         prompt_path: os.PathLike,
         system_prompt_path="prompts/sys/system.txt",
-        model_name: str = "gpt-5",
+        model_name: str = "gpt-5.1",
         temperature: float = 0.8,
         tools = None,
         top_p = 1,

@@ -1,35 +1,45 @@
 agents:
   - name: Summary_Agent
-    prompt_path: prompts/summary_agent.txt
+    prompt_path: prompts/sys/summary_agent.txt
     rank: 0
 
   - name: Router_Agent
-    prompt_path: prompts/router.txt
+    prompt_path: prompts/sys/router.txt
     rank: 1
+    temperature: 0.4
     conditional_links:
       - CV_Task_Agent
       - CL_Task_Agent
 
   - name: CV_Task_Agent
-    prompt_path: prompts/dummy.txt
+    prompt_path: path
     rank: 2
     hard_links:
       - CV_Agent
 
   - name: CV_Agent
-    prompt_path: prompts/cv_agent.txt
+    prompt_path: path
     rank: 3
     hard_links:
       - Router_Agent
 
   - name: CL_Task_Agent
-    prompt_path: prompts/dummy.txt
+    prompt_path: prompts/cl/task_agent.txt
     rank: 2
     hard_links:
       - CL_Agent
 
   - name: CL_Agent
-    prompt_path: prompts/cl_agent.txt
+    prompt_path: prompts/cl/creator_agent.txt
     rank: 3
     hard_links:
-      - Router_Agent
+      - Quality_Checker_Agent
+
+  - name: Quality_Checker_Agent
+    prompt_path: prompts/cl/quality_checker.txt
+    rank: 4
+    hard_links:
+    - Router_Agent
+
+
+    
