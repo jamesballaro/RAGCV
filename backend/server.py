@@ -43,6 +43,8 @@ class LaTeXRequest(BaseModel):
 TEST_NAME = f"web_request_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 LOG_PATH = f"logs/server_log_{TEST_NAME}.jsonl"
 OUTPUT_PATH = f"output/{TEST_NAME}"
+# Global variable to store last retrieved docs
+LAST_RETRIEVED_DOCS = []
 
 # Initialize components globally so we don't reload FAISS on every request
 loader = DataLoader(data_path="data", db_path="data/db.faiss")
@@ -57,23 +59,46 @@ graph = RouterGraph(agents=agents, logger=logger)
 
 @app.post("/query")
 async def run_query(request: QueryRequest):
-    # 1. Enrich query
+    global last_retrieved_docs
+
     message = enricher.enrich_with_context(request.text)
 
-    # 2. Invoke Graph
-    output = graph.invoke({'messages': [HumanMessage(content=message)]})
-    # 3. Choose output file based on test_name
+    # Capture retrieved documents from enricher
+    if enricher.retrieved_docs:
+        last_retrieved_docs = enricher.retrieved_docs.copy()
+    else:
+        last_retrieved_docs = []
+
+    graph.invoke({'messages': [HumanMessage(content=message)]})
+    
+    summary_content = ""
     if TEST_NAME:
-        output_path = f"{OUTPUT_PATH}/cl_output.txt"
+        summary_path = f"output/{TEST_NAME}/summary_output.txt"
+    else:
+        summary_path = "output/summary_output.txt"
+    
+    try:
+        with open(summary_path, "r", encoding="utf-8") as f:
+            summary_content = f.read()
+    except Exception:
+        summary_content = ""
+    
+    if TEST_NAME:
+        output_path = f"output/{TEST_NAME}/cl_output.txt"
     else:
         output_path = "output/cl_output.txt"
+    
     try:
         with open(output_path, "r", encoding="utf-8") as f:
             file_content = f.read()
     except Exception as e:
         file_content = f"Error reading {output_path}: {str(e)}"
-    return {"result": file_content}
-# Add this to your server.py after the /query endpoint
+    
+    return {
+        "result": file_content,
+        "summary": summary_content,
+        "retrieved_artifacts": last_retrieved_docs
+    }
 
 @app.post("/compile_latex")
 async def compile_latex(request: LaTeXRequest):
