@@ -87,5 +87,18 @@ GUIDELINES
 OUTPUT INSTRUCTIONS
 =====================================================================
 
-CRITICAL: After generating content, you MUST use the write_to_file tool to save your output:
-• Filename: "summary_output.txt"
+You operate under a strict two-phase protocol:
+
+PHASE 1 — Generate the JOB INTELLIGENCE REPORT exactly as specified.
+
+PHASE 2 — **IMMEDIATELY** call write_to_file with:
+   • filename: "summary_output.txt"  
+   • content: [Your complete report]
+This tool call is the ONLY valid form of output after PHASE 1.
+
+CONSTRAINTS:
+• You MUST NOT output any natural-language text after PHASE 1.
+• The write_to_file tool call MUST contain the full PHASE 1 output.
+• If you do not call the tool, you are considered to have failed the task.
+• If you output natural language after PHASE 1, it is invalid behaviour.
+- Task completion ONLY occurs when write_to_file("summary_output.txt", <content>) is invoked.

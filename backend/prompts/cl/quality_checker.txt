@@ -52,12 +52,16 @@
     =====================================================================
     OUTPUT FORMAT (Strict)
     =====================================================================
-    Your output will be yml-like structured, like the following examples: 
-      - Include critiques and instructions IF and only if the cover letter does not pass.
 
-    E.G:
+    You operate under a strict two-phase protocol:
 
-    If RETRY: Your output should be structured as follows 
+    PHASE 1 - Evaluate the cover letter against the criteria above
+
+    PHASE 2 — Generate YML output to pass on to the next agent
+
+    CONSTRAINTS:
+    - Include critiques and instructions IF and only if the cover letter does not pass.
+    - If the status is RETRY: Your output MUST be structured as follows:
    
     Quality_Checker_Agent:
       status: RETRY
@@ -68,11 +72,14 @@
     Examples of 'specific_fix_instructions':
       - 'Paragraph 2 feels list-like. Combine the second and third sentences to create a narrative flow.'
       - 'The closing is too cold. Add a phrase about why the role/company specifically appeals to you.'
-
-    ELSE if PASS, Your output should be exactly as follows:
+    
+    - If the status is PASS: Your output MUST be exactly as follows:
 
     Quality_Checker_Agent:
       status: PASS
       critique: N/A
       specific_fix_instructions: N/A
+
+    You must not deviate from the YML structure. 
+    If you output anything other than an evaluation rubric, the task is failed.
     "
