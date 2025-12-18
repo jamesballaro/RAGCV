@@ -1,8 +1,8 @@
 import os
+from typing import Callable, List, Any
 from langchain.tools import tool
-from functools import partial
 
-def build_registry(test_name: str):
+def build_registry(test_name: str) -> List[Any]:
     return [
         tool(
             name_or_callable="write_to_file",
@@ -11,8 +11,7 @@ def build_registry(test_name: str):
         )
     ]
 
-#Factory method instead of functools.partial which is incompatible with langchain
-def make_write_to_file(test_name: str):
+def make_write_to_file(test_name: str) -> Callable[[str, str], str]:
     def inner(content: str, filename: str = "output.txt") -> str:
         os.makedirs(os.path.join("output", test_name), exist_ok=True)
         filepath = os.path.join("output", test_name, filename)

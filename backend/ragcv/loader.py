@@ -24,7 +24,13 @@ from .retrieval.chunking import (
 )
 
 class DataLoader():
-    def __init__(self, data_path: os.PathLike, db_path: os.PathLike, chunk_size: int = 1024, chunk_overlap: int = 256 ):
+    def __init__(
+        self, 
+        data_path: os.PathLike, 
+        db_path: os.PathLike, 
+        chunk_size: int = 1024, 
+        chunk_overlap: int = 256 
+    ):
         self.data_path = data_path
         self.db_path = db_path
         self.loaders = None

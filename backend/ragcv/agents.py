@@ -1,6 +1,6 @@
 # This file will contain the various agents that will be used in the graph
 import os
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict, Tuple, Sequence
 
 from langchain_core.messages import AnyMessage, BaseMessage, ToolMessage
 from langchain_core.prompts import (
@@ -16,18 +16,18 @@ from .utils.logger import JSONLLogger
 class Agent:
     def __init__(
         self,
-        name,
+        name: str,
         prompt_path: os.PathLike,
-        system_prompt_path="prompts/sys/system.txt",
+        system_prompt_path: os.PathLike = "prompts/sys/system.txt",
         model_name: str = "gpt-5.1",
         temperature: float = 0.8,
-        tools = None,
-        top_p = 1,
+        tools: Optional[List[Any]] = None,
+        top_p: float = 1,
         logger: Optional[JSONLLogger] = None,
-    ):  
+    ) -> None:  
         self.name = name
         self.prompt_path = prompt_path
-        self.system_prompt_path=system_prompt_path
+        self.system_prompt_path = system_prompt_path
         self.tools = tools or []
         self.chain = None
         self.logger = logger
@@ -43,12 +43,12 @@ class Agent:
             self.llm = self.llm.bind_tools(self.tools)
 
         # Setup the agent
-        self.system_prompt=""
+        self.system_prompt = ""
         self.load_system_prompt()
         self.build_prompt_template()
         self.build_chain()
 
-    def load_system_prompt(self):
+    def load_system_prompt(self) -> None:
         for path in [self.system_prompt_path, self.prompt_path]:
             try:
                 with open(path, "r") as f:
@@ -58,16 +58,16 @@ class Agent:
                 print(f"[Error: System prompt file: {path} not found, {self.name} not specialized.]\n")
                 return
 
-    def build_prompt_template(self):
+    def build_prompt_template(self) -> None:
         self.prompt_template = ChatPromptTemplate.from_messages([
             SystemMessagePromptTemplate.from_template(self.system_prompt),
             MessagesPlaceholder(variable_name="messages"),
         ])
 
-    def build_chain(self):
+    def build_chain(self) -> None:
         self.chain = self.prompt_template | self.llm
 
-    def __call__(self, state):
+    def __call__(self, state: Dict[str, Any]) -> Dict[str, Any]:
         print(f'{"="*60}\nAgent called: {self.name}\n{"="*60}')
 
         messages = state.get("messages", [])
@@ -96,9 +96,12 @@ class Agent:
             )
         return {"messages": response_messages}
 
-def process_tool_call(result, tools):
-    tool_messages = []
-    tool_logs = []
+def process_tool_call(
+    result: Any,
+    tools: Sequence[Any],
+) -> Tuple[List[ToolMessage], List[Dict[str, Any]]]:
+    tool_messages: List[ToolMessage] = []
+    tool_logs: List[Dict[str, Any]] = []
     tool_map = {t.name: t for t in tools}
 
     for call in result.tool_calls:

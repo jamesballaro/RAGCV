@@ -83,15 +83,6 @@ def chunk_sentences_token_budget(
 ) -> List[str]:
     """
     Chunk sentences respecting token budget with overlap.
-    
-    Args:
-        sentences: List of sentence strings
-        max_tokens: Maximum tokens per chunk
-        overlap_tokens: Number of tokens to overlap between chunks
-        encoding: Optional tiktoken encoding (uses default if None)
-    
-    Returns:
-        List of text chunks
     """
     if not sentences:
         return []
@@ -183,14 +174,6 @@ def chunk_cv(
     1. Split by bullets first
     2. Group bullets into chunks respecting token budget
     3. Add overlap for context
-    
-    Args:
-        text: CV text content
-        max_tokens: Maximum tokens per chunk
-        overlap_tokens: Overlap between chunks
-    
-    Returns:
-        List of text chunks
     """
     bullets = split_bullets(text)
     
@@ -259,17 +242,6 @@ def chunk_cover_letter(
 ) -> List[str]:
     """
     Chunk cover letter using sentence-aware splitting.
-    
-    Cover letters are prose, so sentence boundaries are critical.
-    Larger overlap maintains narrative flow.
-    
-    Args:
-        text: Cover letter text
-        max_tokens: Maximum tokens per chunk
-        overlap_tokens: Overlap between chunks (higher for narrative)
-    
-    Returns:
-        List of text chunks
     """
     sentences = sentence_tokenize(text)
     return chunk_sentences_token_budget(
@@ -289,14 +261,6 @@ def chunk_notes(
     
     Notes can be mixed format, so use sentence splitting
     with moderate overlap.
-    
-    Args:
-        text: Notes text
-        max_tokens: Maximum tokens per chunk
-        overlap_tokens: Overlap between chunks
-    
-    Returns:
-        List of text chunks
     """
     sentences = sentence_tokenize(text)
     return chunk_sentences_token_budget(
@@ -314,14 +278,6 @@ def default_chunker(
     """
     Fallback chunker using LangChain's RecursiveCharacterTextSplitter.
     Used when text structure is unknown or sentence splitting fails.
-    
-    Args:
-        text: Text to chunk
-        chunk_size: Target chunk size in characters
-        chunk_overlap: Overlap in characters
-    
-    Returns:
-        List of text chunks
     """
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
@@ -346,15 +302,6 @@ def chunk_large_document(
     """
     Chunk very large documents by processing in batches.
     Useful for 100+ page documents to avoid memory issues.
-    
-    Args:
-        text: Full document text
-        max_tokens: Maximum tokens per chunk
-        overlap_tokens: Overlap between chunks
-        batch_size: Number of characters to process per batch
-    
-    Returns:
-        List of text chunks
     """
     if len(text) <= batch_size:
         return chunk_notes(text, max_tokens, overlap_tokens)
