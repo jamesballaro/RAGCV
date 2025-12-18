@@ -1,4 +1,13 @@
-
+# =====================================================================
+# GRAPH CONFIGURATION
+# =====================================================================
+# This config controls the structure and routing behaviour of the graph.
+# Allows control over:
+# - System prompt for individual agents
+# - Temperature
+# - Routing structure: 
+#   - Conditional links (LLM determines routing pathway)
+#   - Hard links (override sequential rank graph logic and add deterministic routing)
 
 agents:
   - name: Summary_Agent
@@ -9,7 +18,7 @@ agents:
   - name: Router_Agent
     prompt_path: prompts/sys/router.txt
     rank: 1
-    temperature: 0.4
+    temperature: 0.3
     conditional_links:
       - CV_Task_Agent
       - CL_Task_Agent

@@ -1,13 +1,21 @@
-import yaml
+from pathlib import Path
+from typing import Any, List, Dict
 from ..agents import Agent               
-from .models import GraphSpec
+from .models import GraphConfig, RetrievalConfig
+from ..retrieval.retrieval import AdaptiveRetrieverConfig
 
-def load_from_yaml(path, tools, logger):
-    with open(path, "r") as f:
-        cfg_dict = yaml.safe_load(f)
+def load_graph_config(
+    path: str | Path,
+    tools: Any,
+    logger: Any
+) -> List[Dict[str, Any]]:
+    """
+    Load graph configuration and construct Agent objects.
+    """
+    # Load and validate the config using the class method
+    graph_spec = GraphConfig.from_yaml(path)
 
-    graph_spec = GraphSpec(**cfg_dict)
-
+    # Construct Agent objects
     agents = []
     for spec in graph_spec.agents:
         node = Agent(
@@ -15,7 +23,7 @@ def load_from_yaml(path, tools, logger):
             prompt_path=spec.prompt_path,
             logger=logger,
             tools=tools,
-            temperature=spec.temperature if hasattr(spec, 'temperature') else None,
+            temperature=spec.temperature,
         )
 
         entry = {
@@ -31,3 +39,12 @@ def load_from_yaml(path, tools, logger):
         agents.append(entry)
 
     return agents
+
+def load_retrieval_config(path: str | Path) -> AdaptiveRetrieverConfig:
+    """
+    Loads configuration for retrieval and constructs dataclass object.
+    """
+    # Load and validate the config using the class method
+    cfg = RetrievalConfig.from_yaml(path)
+
+    return AdaptiveRetrieverConfig(**cfg.model_dump())
