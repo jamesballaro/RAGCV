@@ -1,4 +1,7 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from pydantic import BaseModel
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,18 +11,17 @@ import tempfile
 import os
 import shutil
 
-# Import your existing logic
-# Ensure these imports match your actual folder structure relative to server.py
+from langchain_openai import OpenAIEmbeddings
+from langchain_core.messages import HumanMessage
+from dotenv import load_dotenv
 from ragcv.loader import DataLoader
 from ragcv.graph import RouterGraph
 from ragcv.tools.tools import build_registry
 from ragcv.utils.logger import JSONLLogger
 from ragcv.retrieval.enricher import QueryEnricher
 from ragcv.retrieval.retrieval import AdaptiveRetriever
-from ragcv.spec.loader import load_from_yaml
-from langchain_openai import OpenAIEmbeddings
-from langchain_core.messages import HumanMessage
-from dotenv import load_dotenv
+from ragcv.spec.loader import load_graph_config, load_retrieval_config
+
 
 load_dotenv()
 
@@ -32,6 +34,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# =====================================================================
+# GLOBAL VARIABLES
+# =====================================================================
 
 class QueryRequest(BaseModel):
     text: str
@@ -51,11 +57,17 @@ loader = DataLoader(data_path="data", db_path="data/db.faiss")
 embeddings = OpenAIEmbeddings()
 vectorstore = loader.load_vectorstore(embeddings=embeddings)
 logger = JSONLLogger(log_path=LOG_PATH)
-retriever = AdaptiveRetriever(vectorstore=vectorstore, embeddings=embeddings)
+retrieval_cfg = load_retrieval_config(path="config/retrieval.yml")
+retriever = AdaptiveRetriever(vectorstore=vectorstore, embeddings=embeddings, config=retrieval_cfg)
 enricher = QueryEnricher(retriever=retriever, logger=logger)
 tools_list = build_registry(test_name=TEST_NAME)
-agents = load_from_yaml(path="config/graph.yml", tools=tools_list, logger=logger)
-graph = RouterGraph(agents=agents, logger=logger)
+graph_cfg = load_graph_config(path="config/graph.yml", tools=tools_list, logger=logger)
+graph = RouterGraph(agents=graph_cfg, logger=logger)
+
+
+# =====================================================================
+# API ROUTES
+# =====================================================================
 
 @app.post("/query")
 async def run_query(request: QueryRequest):
@@ -167,9 +179,43 @@ async def get_logs():
             return {"logs": "Log file not found. No requests processed yet."}
     except Exception as e:
         return {"logs": f"Error reading logs: {str(e)}"}
+
+# =====================================================================
+# STATIC FILE SERVING
+# =====================================================================
+FRONTEND_BUILD_DIR = Path(__file__).parent.parent / "frontend" / "dist"
+
+if FRONTEND_BUILD_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_BUILD_DIR / "assets"), name="assets")
+    
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        file_path = FRONTEND_BUILD_DIR / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        
+        return FileResponse(FRONTEND_BUILD_DIR / "index.html")
+else:
+    @app.get("/")
+    async def root():
+        return {
+            "message": "Backend API running. Frontend not built yet.",
+            "instructions": "Run 'cd frontend && npm run build' to build frontend."
+        }
+    
     
 if __name__ == "__main__":
     import uvicorn
+
+    if not FRONTEND_BUILD_DIR.exists():
+        print("\n" + "="*60)
+        print("WARNING: Frontend not built!")
+        print("Run: cd frontend && npm run build")
+        print("="*60 + "\n")
+    else:
+        print("\n" + "="*60)
+        print(f"Frontend build found: {FRONTEND_BUILD_DIR}")
+        print("App will be available at: http://localhost:8000")
+        print("="*60 + "\n")
+    
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-

@@ -99,7 +99,7 @@ const useLatexCompiler = () => {
     const controller = new AbortController();
     abortControllerRef.current = controller;
     try {
-      const response = await fetch('http://localhost:8000/compile_latex', {
+      const response = await fetch('/compile_latex', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ latex: latexCode }),
@@ -184,7 +184,7 @@ const useAutoRefreshLogs = (enabled, interval = 2000) => {
     abortControllerRef.current = controller;
    
     try {
-      const response = await fetch('http://localhost:8000/logs', {
+      const response = await fetch('/logs', {
         signal: controller.signal
       });
       if (!response.ok) throw new Error(`Failed to fetch logs: ${response.status}`);
@@ -257,7 +257,7 @@ function App() {
     const controller = new AbortController();
     queryAbortControllerRef.current = controller;
     try {
-      const response = await fetch('http://localhost:8000/query', {
+      const response = await fetch('/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: input }),
