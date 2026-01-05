@@ -1,4 +1,4 @@
-name: ragcv
+name: ragcv_test
 channels:
   - pytorch
   - conda-forge
@@ -6,7 +6,6 @@ dependencies:
   - python=3.11
   - numpy=1.26.*
   - scipy=1.12.*
-  - faiss-cpu>=1.13.0
   - pytorch=2.3.*
   - torchvision
   - torchaudio
