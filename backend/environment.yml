@@ -1,4 +1,4 @@
-name: ragcv_test
+name: ragcv
 channels:
   - pytorch
   - conda-forge
