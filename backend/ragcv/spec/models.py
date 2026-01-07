@@ -46,24 +46,24 @@ class GraphConfig(BaseModel):
             raise ValueError(f"Ranks must be contiguous integers. Got: {ranks}")
 
         return agents
-    
+
     @classmethod
     def from_yaml(cls, path: str) -> 'GraphConfig':
         """Load and validate GraphConfig from a YAML file."""
         path = Path(path)
-        
+
         if not path.exists():
             raise FileNotFoundError(f"Graph config file not found: {path}")
-        
+
         try:
             with open(path, "r") as f:
                 cfg_dict = yaml.safe_load(f)
         except yaml.YAMLError as e:
             raise ValueError(f"Failed to parse YAML from {path}: {e}") from e
-        
+
         if not cfg_dict:
             raise ValueError(f"Empty configuration file: {path}")
-        
+
         return cls(**cfg_dict)
 
 class RetrievalConfig(BaseModel):
@@ -78,9 +78,9 @@ class RetrievalConfig(BaseModel):
     use_hybrid: bool = True
     bm25_weight: float = 0.5
     embedding_weight: float = 0.5
-    
 
-    
+
+
     @field_validator("base_k", "min_high_score", "mmr_k")
     @classmethod
     def validate_positive_int(cls, v: int, info) -> int:
@@ -88,7 +88,7 @@ class RetrievalConfig(BaseModel):
         if v <= 0:
             raise ValueError(f"{info.field_name} must be positive, got {v}")
         return v
-    
+
     @field_validator("score_threshold", "dedupe_threshold")
     @classmethod
     def validate_threshold_range(cls, v: float, info) -> float:
@@ -96,7 +96,7 @@ class RetrievalConfig(BaseModel):
         if not 0 <= v <= 1:
             raise ValueError(f"{info.field_name} must be between 0 and 1, got {v}")
         return v
-    
+
     @field_validator("mmr_lambda")
     @classmethod
     def validate_mmr_lambda(cls, v: float) -> float:
@@ -104,7 +104,7 @@ class RetrievalConfig(BaseModel):
         if not 0 <= v <= 1:
             raise ValueError(f"mmr_lambda must be between 0 and 1, got {v}")
         return v
-    
+
     @field_validator("bm25_weight", "embedding_weight")
     @classmethod
     def validate_weight_range(cls, v: float, info) -> float:
@@ -112,7 +112,7 @@ class RetrievalConfig(BaseModel):
         if not 0 <= v <= 1:
             raise ValueError(f"{info.field_name} must be between 0 and 1, got {v}")
         return v
-    
+
     @model_validator(mode='after')
     def validate_weights_sum(self) -> 'RetrievalConfig':
         """Ensure BM25 and embedding weights sum to approximately 1.0."""
@@ -124,7 +124,7 @@ class RetrievalConfig(BaseModel):
                     f"got {weight_sum:.3f} ({self.bm25_weight} + {self.embedding_weight})"
                 )
         return self
-    
+
     @model_validator(mode='after')
     def validate_mmr_k_vs_base_k(self) -> 'RetrievalConfig':
         """Ensure MMR k doesn't exceed base k."""
@@ -133,22 +133,22 @@ class RetrievalConfig(BaseModel):
                 f"mmr_k ({self.mmr_k}) cannot exceed base_k ({self.base_k})"
             )
         return self
-    
+
     @classmethod
     def from_yaml(cls, path: str) -> 'RetrievalConfig':
         """Load and validate RetrievalConfig from a YAML file."""
         path = Path(path)
-        
+
         if not path.exists():
             raise FileNotFoundError(f"Retrieval config file not found: {path}")
-        
+
         try:
             with open(path, "r") as f:
                 cfg_dict = yaml.safe_load(f)
         except yaml.YAMLError as e:
             raise ValueError(f"Failed to parse YAML from {path}: {e}") from e
-        
+
         if not cfg_dict:
             raise ValueError(f"Empty configuration file: {path}")
-        
+
         return cls(**cfg_dict)
