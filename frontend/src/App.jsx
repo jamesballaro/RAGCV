@@ -334,6 +334,16 @@ function App() {
       }
     };
   }, []);
+  // Add useEffect to fetch the guide on mount:
+  useEffect(() => {
+    fetch('/APP_GUIDE.md')
+      .then(response => response.text())
+      .then(text => setAppGuideContent(text))
+      .catch(err => {
+        console.error('Failed to load guide:', err);
+        setAppGuideContent('# Guide Unavailable\n\nFailed to load the application guide.');
+      });
+  }, []);
   const toggleLatexView = useCallback(() => setShowLatexSource(v => !v), []);
   const toggleAutoRefresh = useCallback((e) => setAutoRefresh(e.target.checked), []);
   const toggleLogsWrap = useCallback((e) => setLogsWrapText(e.target.checked), []);
@@ -556,8 +566,6 @@ function App() {
                         </div>
                       </div>
                     )}
-                  
-                   
                     <div>
                       {summaryOutput && (
                         <div className="flex items-center gap-2 mb-3">
@@ -676,18 +684,37 @@ function App() {
         </div>
         {showAbout && (
           <div className="absolute inset-0 z-50 bg-white/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md border border-slate-200 shadow-xl rounded-2xl p-6">
-              <h2 className="text-lg font-semibold mb-2">About This Tool</h2>
-              <p className="text-slate-600 text-sm leading-relaxed mb-4">
-                This is a local RAG (Retrieval-Augmented Generation) interface designed to help tailor job applications.
-                It processes job descriptions locally and generates targeted documents based on your stored credentials.
-              </p>
-              <button
-                onClick={() => setShowAbout(false)}
-                className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors"
-              >
-                Close
-              </button>
+            <div className="bg-white w-full max-w-2xl max-h-[80vh] border border-slate-200 shadow-xl rounded-2xl flex flex-col">
+              {/* Header */}
+              <div className="flex-none px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">About & Guide</h2>
+                <button
+                  onClick={() => setShowAbout(false)}
+                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              {/* Scrollable Content */}
+              <div className="flex-grow overflow-y-auto px-6 py-4">
+                <div 
+                  className="prose prose-sm max-w-none prose-headings:text-slate-900 prose-p:text-slate-600 prose-strong:text-slate-700 prose-ul:text-slate-600"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(appGuideContent) }}
+                />
+              </div>
+              
+              {/* Footer */}
+              <div className="flex-none px-6 py-3 border-t border-slate-200 bg-slate-50">
+                <button
+                  onClick={() => setShowAbout(false)}
+                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         )}

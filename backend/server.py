@@ -1,3 +1,12 @@
+import subprocess
+import tempfile
+import os
+import shutil
+import uvicorn
+import asyncio
+import json
+import uuid
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -5,15 +14,12 @@ from pathlib import Path
 from pydantic import BaseModel
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
-import subprocess
-import tempfile
-import os
-import shutil
-
+from fastapi.responses import Response, StreamingResponse
+from typing import AsyncGenerator
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
+
 from ragcv.loader import DataLoader
 from ragcv.graph import RouterGraph
 from ragcv.tools.tools import build_registry
@@ -44,6 +50,14 @@ class QueryRequest(BaseModel):
 
 class LaTeXRequest(BaseModel):
     latex: str
+
+
+def read_file(path: str) -> str:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return f"Error reading {path}"
 
 # Save test_name globally so it's accessible everywhere needed
 TEST_NAME = f"web_request_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -205,8 +219,6 @@ else:
     
     
 if __name__ == "__main__":
-    import uvicorn
-
     if not FRONTEND_BUILD_DIR.exists():
         print("\n" + "="*60)
         print("WARNING: Frontend not built!")
