@@ -12,13 +12,14 @@ class JSONLLogger:
     def __init__(self, log_path: str = "logs/agent_runs.jsonl"):
         self.log_path = log_path
         self._lock = threading.Lock()
+        self.conversation_log: List[Dict] = []
+
         log_dir = os.path.dirname(log_path)
         if log_dir and not os.path.exists(log_dir):
             os.makedirs(log_dir, exist_ok=True)
-        # Check if log file exists, if so, empty it
         if os.path.exists(self.log_path):
             with open(self.log_path, "w", encoding="utf-8") as log_file:
-                pass  # This will empty the file
+                pass  
 
     def log(self, payload: Dict[str, Any]) -> None:
         """Write a payload as a JSON line with timestamp metadata."""
@@ -38,51 +39,61 @@ class JSONLLogger:
             return str(obj)
         except Exception:
             return repr(obj)
-        
-    @staticmethod
-    def serialize_langchain_message(message: BaseMessage) -> dict:
-        return {
-            "type": message.__class__.__name__,
-            "content": getattr(message, "content", None),
-            "tool_calls": getattr(message, "tool_calls", []),
-            "additional_kwargs": getattr(message, "additional_kwargs", {}),
-            # "response_metadata": getattr(message, "response_metadata", {}),
-        }
+    
     
     def log_agent_invocation(
         self,
         agent_name: str, 
-        input_messages: List[AnyMessage], 
-        output_messages: List[AnyMessage],
+        input_message: List[AnyMessage] | None,
+        output_message: List[AnyMessage],
         tool_logs: List[dict]) -> None:
-
-        serialized_input = [JSONLLogger.serialize_langchain_message(msg) for msg in input_messages]
-        serialized_output = [JSONLLogger.serialize_langchain_message(msg) for msg in output_messages]
         
+        payload={
+            "agent_name": agent_name,
+            "event": "agent_invocation",
+            
+            # Take last message
+            "input_message": input_message,
+            "output_message": output_message,
+            "tool_calls": tool_logs,
+        }
+        self.log(payload=payload)
+        self.conversation_log.append(payload)
+    
+    def log_agent_error(self, agent_name, error_message):
+        payload={
+            "agent_name": agent_name,
+            "event": "agent_invocation",
+            "error_message": error_message
+        }
+        self.log(payload=payload)
+        self.conversation_log.append(payload)
+
+   
+    def log_conversation(self) -> None:
+        conversation = []
+        for message in self.conversation_log:
+            name = message['agent_name']
+            content = message.get('output_message', None)
+            if content is None: 
+                content = message.get('error_message')
+            conversation.append({
+                'agent_name': name,
+                'content': content
+            })
+
         self.log(payload={
-                "agent_name": agent_name,
-                "event": "agent_invocation",
-                "input_messages": serialized_input,
-                "output_messages": serialized_output,
-                "tool_calls": tool_logs,
+                "full_conversation": conversation
             }
         )
+    def get_conversation_log(self) -> None:
+        conversation = []
+        for message in self.conversation_log:
+            name = message['agent_name']
+            content = message['output_message']
+            conversation.append({
+                'agent_name': name,
+                'content': content
+            })
 
-    def log_conversation(self, messages: List[AnyMessage]) -> None:
-        formatted_messages = []
-        for msg in messages:
-            metadata = JSONLLogger.serialize_langchain_message(msg)
-
-            name = "Unknown"
-            additional_kwargs = metadata.get('additional_kwargs', {})
-            if isinstance(additional_kwargs, dict):
-                agent_name = additional_kwargs.get("agent_name")
-                if agent_name:
-                    name = agent_name
-
-            formatted_messages.append(f"Agent name:{name},\n\n{metadata['content']}")
-
-        self.log(payload={
-                "full_conversation": formatted_messages
-            }
-        )
+        return conversation

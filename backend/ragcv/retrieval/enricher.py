@@ -23,10 +23,20 @@ class QueryEnricher():
         """ Takes input query and enriches it with retrieved context"""
         docs = self.retriever.invoke(query)
         context = self.process_docs(docs)
+        formatted_context = format_docs(context)
+
         self.log_invocation()
-        return  f"<context>\n{context}\n</context>\n\n" + f"<query>\n{query}\n</query>" 
+        return  f"<context>\n{formatted_context}\n</context>\n\n" + f"<query>\n{query}\n</query>" 
     
-    
+    def get_retrieved_artifacts(self, query: str):
+        """ Takes input query and returns retrieved context"""
+        docs = self.retriever.invoke(query)
+        context = self.process_docs(docs)
+        self.log_invocation
+
+        return context
+
+     
     def process_docs(self, docs: list) -> str:
         if self.logger is not None:
             self.retrieved_docs = [
@@ -37,7 +47,7 @@ class QueryEnricher():
                 for doc in docs
             ]
 
-        return format_docs(docs)
+        return docs
     
     def log_invocation(self):
         diagnostics = {}

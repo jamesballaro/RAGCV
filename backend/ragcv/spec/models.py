@@ -5,8 +5,8 @@ from pydantic import BaseModel, field_validator, model_validator
 
 class AgentConfig(BaseModel):
     name: str
-    prompt_path: str
     rank: int
+    prompt_path: Optional[str] = None
     temperature: Optional[float] = 0.8
     conditional_links: Optional[List[str]] = None
     hard_links: Optional[List[str]] = None

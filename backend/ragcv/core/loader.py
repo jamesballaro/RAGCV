@@ -15,7 +15,7 @@ from langchain_community.document_loaders import (
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 
-from .retrieval.chunking import (
+from ..retrieval.chunking import (
     token_count, 
     chunk_cover_letter, 
     chunk_cv, 

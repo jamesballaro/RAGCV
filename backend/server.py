@@ -20,8 +20,8 @@ from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.messages import HumanMessage
 
-from ragcv.loader import DataLoader
-from ragcv.graph import RouterGraph
+from ragcv.core.loader import DataLoader
+from ragcv.graph.graph import RouterGraph
 from ragcv.tools.tools import build_registry
 from ragcv.utils.logger import JSONLLogger
 from ragcv.retrieval.enricher import QueryEnricher
@@ -118,11 +118,17 @@ async def run_graph_task(task_id: str, input_text: str, retriever: AdaptiveRetri
         graph = RouterGraph(agents=graph_cfg, logger=task_logger)
 
         # Step 1: Enrichment
-        message = await asyncio.to_thread(enricher.enrich_with_context, input_text)
-        tasks[task_id]["artifacts"] = [doc.metadata.get('source', 'unknown') for doc in enricher.retrieved_docs]
+        retrieved_docs = await asyncio.to_thread(enricher.get_retrieved_artifacts, input_text)
+         
+        tasks[task_id]["artifacts"] = retrieved_docs
+
+        graph_input = {
+            'job_description': HumanMessage(content=input_text),
+            'retrieved_documents': retrieved_docs,
+        }
 
         # Step 2: Graph Execution
-        await asyncio.to_thread(graph.invoke, {'messages': [HumanMessage(content=message)]})
+        await asyncio.to_thread(graph.invoke, graph_input)
 
         # Step 3: Collect Results
         tasks[task_id]["result"] = read_file_safe(f"{output_dir}/cl_output.txt")
