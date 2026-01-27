@@ -199,35 +199,32 @@ or explained in the final output.
 # Job Summary
 
 ## 1. STRATEGIC CONTEXT
-* **Role:** [Title]
-* **Hiring Trigger:** [Why they are hiring]
-* **Company Mission:** [Key quote or mission statement]
++ **Role:** [Title]
++ **Hiring Trigger:** [Why they are hiring]
++ **Company Mission:** [Key quote or mission statement]
 
 ## 2. CORE REQUIREMENTS (Ranked)
-* **Top Technical Skills:**
-* **Crucial Soft Skills:** [List soft skills]
-* **Hard Gates:** [Education / Years of Exp / Certs]
++ **Top Technical Skills:**
++ **Crucial Soft Skills:** [List soft skills]
++ **Hard Gates:** [Education / Years of Exp / Certs]
 
 ## 3. KEY RESPONSIBILITIES (Deliverables)
-* [Responsibility 1] - [Expected Outcome]
-* [Responsibility 2] - [Expected Outcome]
-* [Responsibility 3] - [Expected Outcome]
++ [Responsibility 1] - [Expected Outcome]
++ [Responsibility 2] - [Expected Outcome]
++ [Responsibility 3] - [Expected Outcome]
 
 ## 4. INFERRED PAIN POINTS (The Hook)
-* **Pain Point 1:** [Problem] -> [Implied Need]
-* **Pain Point 2:** [Problem] -> [Implied Need]
++ **Pain Point 1:** [Problem] -> [Implied Need]
++ **Pain Point 2:** [Problem] -> [Implied Need]
 
 ## 5. PREFERRED QUALIFICATIONS (Bonus)
-* [Nice-to-have 1]
-* [Nice-to-have 2]
++ [Nice-to-have 1]
++ [Nice-to-have 2]
 
 ## 6. KEYWORDS & TERMINOLOGY (ATS Optimization)
-* **High-Res Tech Stack:** [Specific nouns: React, AWS, Docker, etc.]
-* **ATS Keywords:** [Buzzwords found repeatedly in text]
-* **Tone/Voice:** [Adjectives describing the company voice]
-
-## 7. User Query:
-* **The query should mention either "CV" or "Cover Letter" depending on the user's intent. Pass  this on in your summary
++ **High-Res Tech Stack:** [Specific nouns: React, AWS, Docker, etc.]
++ **ATS Keywords:** [Buzzwords found repeatedly in text]
++ **Tone/Voice:** [Adjectives describing the company voice]
 
 =====================================================================
 GUIDELINES
