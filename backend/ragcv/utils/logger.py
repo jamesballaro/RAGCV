@@ -27,7 +27,8 @@ class JSONLLogger:
             "timestamp": datetime.now(timezone.utc).isoformat(),
             **payload,
         }
-        serialized = json.dumps(entry, indent=4, default=self._fallback_serializer)
+        # JSONL for easier parsing
+        serialized = json.dumps(entry, default=self._fallback_serializer)
         with self._lock:
             with open(self.log_path, "a", encoding="utf-8") as log_file:
                 log_file.write(serialized + "\n")
