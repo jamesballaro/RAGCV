@@ -87,12 +87,6 @@ class LaTeXRequest(BaseModel):
 # Persistent background task store
 tasks: Dict[str, dict] = {}
 
-def read_file_safe(path: str) -> str:
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    return ""
-
 # =====================================================================
 # CORE LOGIC (BACKGROUND TASKS)
 # =====================================================================
@@ -128,11 +122,11 @@ async def run_graph_task(task_id: str, input_text: str, retriever: AdaptiveRetri
         }
 
         # Step 2: Graph Execution
-        await asyncio.to_thread(graph.invoke, graph_input)
+        final_state = await asyncio.to_thread(graph.invoke, graph_input)
 
         # Step 3: Collect Results
-        tasks[task_id]["result"] = read_file_safe(f"{output_dir}/cl_output.txt")
-        tasks[task_id]["summary"] = read_file_safe(f"{output_dir}/summary_output.txt")
+        tasks[task_id]["result"] = final_state.get("document")
+        tasks[task_id]["summary"] = final_state.get("summary")
         tasks[task_id]["status"] = "completed"
         
     except Exception as e:
@@ -166,7 +160,7 @@ async def get_status(task_id: str):
     return tasks[task_id]
 
 @app.get("/logs/{task_id}")
-async def get_logs(task_id: str, tail: int = 50):
+async def get_logs(task_id: str):
     log_path = f"logs/task_{task_id}.jsonl"
     if not os.path.exists(log_path):
         return {"logs": "Initializing task logs..."}
@@ -174,7 +168,7 @@ async def get_logs(task_id: str, tail: int = 50):
     try:
         with open(log_path, "r") as f:
             lines = f.readlines()
-            return {"logs": "".join(lines[-tail:])}
+            return {"logs": "".join(lines)}
     except Exception as e:
         return {"logs": f"Error: {str(e)}"}
 
@@ -193,12 +187,18 @@ async def compile_latex(request: LaTeXRequest):
                 stderr=subprocess.PIPE,
                 timeout=30
             )
+            pdf_file = os.path.join(temp_dir, "document.pdf")
 
-            if result.returncode != 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail=result.stderr.decode(errors="ignore")
-                )
+            # If the PDF exists, ignore the returncode and return the file
+            if os.path.exists(pdf_file):
+                with open(pdf_file, "rb") as f:
+                    return Response(content=f.read(), media_type="application/pdf")
+
+            # If no PDF was generated, then it's a real fatal error
+            raise HTTPException(
+                status_code=400,
+                detail=result.stdout.decode(errors="ignore") # stdout contains the TeX log
+            )
         
         pdf_file = os.path.join(temp_dir, "document.pdf")
         if not os.path.exists(pdf_file):
