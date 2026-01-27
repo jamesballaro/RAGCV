@@ -37,9 +37,6 @@ class CVTaskAgentOutputModel(BaseModel):
 
 class CVAgentOutputModel(BaseModel):
     document: str = Field(description="Final, human-sounding cover letter text suitable for a high-level candidate")
-    file_path: Optional[str] = Field(
-        description="Where the cover letter was saved, e.g., 'cl_output.txt'", default=None
-    )
 
 class CLTaskAgentOutputModel(BaseModel):
     blueprint: str = Field(
@@ -48,6 +45,3 @@ class CLTaskAgentOutputModel(BaseModel):
 
 class CLAgentOutputModel(BaseModel):
     document: str = Field(description="Final, human-sounding cover letter text suitable for a high-level candidate")
-    file_path: Optional[str] = Field(
-        description="Where the cover letter was saved, e.g., 'cl_output.txt'", default=None
-    )

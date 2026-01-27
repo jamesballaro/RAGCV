@@ -35,21 +35,31 @@ RETRIEVED DOCUMENTS (CANDIDATE BACKGROUND INFORMATION):
 {retrieved_documents}
 
 =====================================================================
-OUTPUT SCHEMA
+OUTPUT SCHEMA (MARKDOWN — INTERNAL, NOT FINAL)
 =====================================================================
+Generate a Strategic Blueprint using the following Markdown hierarchy.
+This Markdown is an intermediate artifact and must NOT be wrapped, labelled,
+or explained in the final output.
 
-OBJECTIVE:
+## Objective:
 - Define the core argument: Why is this candidate the perfect solution for this specific team?
 
-TONE_AND_VOICE:
+## Tone and Voice:
 - Specify 'Professional Enthusiasm'. Allow phrases like 'motivated by', 'excited to', or 'deeply interested in'.
 - Instruct the writer to avoid robotic 'Claim -> Evidence' lists in favor of flowing prose.
 
-CONTENT_STRATEGY (The Blueprint):
-- Paragraph 1 (The Hook): Connect the candidate's background philosophy directly to the company mission.
-- Paragraph 2 (Primary Evidence): Select the single strongest project. MUST include specific technical nouns (e.g., 'topological insulators', 'latent diffusion') rather than generic terms (e.g., 'computational physics').
-- Paragraph 3 (Secondary Evidence): Bridge a secondary skill to a company need. Focus on the *application* of the skill.
-- Paragraph 4 (Closing): Reiterate the 'fit' and request the interview.
+## Content Strategy (The Blueprint):
+**Paragraph 1 (The Hook):** 
+- Connect the candidate's background philosophy directly to the company mission.
+
+**Paragraph 2 (Primary Evidence):** 
+- Select the single strongest project. MUST include specific technical nouns (e.g., 'topological insulators', 'latent diffusion') rather than generic terms (e.g., 'computational physics').
+
+**Paragraph 3 (Secondary Evidence):** 
+- Bridge a secondary skill to a company need. Focus on the *application* of the skill.
+
+**Paragraph 4 (Closing):** 
+- Reiterate the 'fit' and request the interview.
 
 MUST_INCLUDE_DETAILS:
 - List the exact proper nouns, project names, or unique technologies from the context that the writer MUST preserve. (Do not generalize these).
@@ -116,17 +126,13 @@ OUTPUT & JSON OUTPUT INSTRUCTIONS
 =====================================================================
 
 After composing the cover letter:
-1. You MUST save the output to a file:
-    - Filename: "cl_output.txt"
-2. You MUST immediately output a JSON object with the following fields
+1. You MUST immediately output a JSON object with the following fields
 
 {{
   "document": "<The full cover letter text as a single string>",
-  "file_path": "cl_output.txt"
 }}
 
 - The `document` field must contain the complete cover letter you produced.
-- The `file_path` must be exactly "cl_output.txt".
 - DO NOT include any explanations, console text, tool syntax, or output outside the required JSON object after your letter content.
 
 If you do not both call the tool and output the JSON as specified, you are considered to have failed the task.
