@@ -1,5 +1,4 @@
 from typing import Dict, Any, Optional
-from pydantic import BaseModel
 
 from ..graph.state import RouterGraphState
 

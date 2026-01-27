@@ -30,18 +30,6 @@ class PromptFactory:
                 ],
             )
 
-        elif prompt_type == "Router_Agent":
-            prompt = ChatPromptTemplate(
-                messages=[
-                    HumanMessagePromptTemplate.from_template(
-                        _prepend_system_prompt(RouterPrompt)
-                    )
-                ],
-                input_variables = [
-                    'router_input'
-                ],
-            )
-
         # COVER LETTER PATHWAY
         elif prompt_type == "CL_Task_Agent":
             prompt = ChatPromptTemplate(

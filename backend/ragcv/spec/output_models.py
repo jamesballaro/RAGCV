@@ -26,10 +26,7 @@ class QualityCheckerAgentOutputModel(BaseModel):
         default=None,
         description="If RETRY, one or more concrete example fixes; otherwise 'N/A'"
     )
-
-class RouterAgentOutputModel(BaseModel):
-    routing_selection: str = Field(description="The next agent to invoke, as a string. Example: 'CV_Task_Agent', 'CL_Task_Agent', or 'END'")
-
+    
 class CVTaskAgentOutputModel(BaseModel):
     blueprint: str = Field(
         description="The blueprint created from the summarised job description "
