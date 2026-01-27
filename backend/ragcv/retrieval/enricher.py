@@ -32,10 +32,8 @@ class QueryEnricher():
         """ Takes input query and returns retrieved context"""
         docs = self.retriever.invoke(query)
         context = self.process_docs(docs)
-        self.log_invocation
-
+        self.log_invocation()
         return context
-
      
     def process_docs(self, docs: list) -> str:
         if self.logger is not None:
@@ -46,6 +44,12 @@ class QueryEnricher():
                 }   
                 for doc in docs
             ]
+
+            self.retrieved_docs = sorted(
+                self.retrieved_docs, 
+                key=lambda x: x.get("score", 0), 
+                reverse=True
+            )
 
         return docs
     
