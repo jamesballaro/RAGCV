@@ -11,6 +11,7 @@ from ..core.loader import DataLoader
 from ..graph.graph import RouterGraph
 from ..tools.tools import build_registry
 from ..utils.logger import JSONLLogger
+from ..utils.file import write_to_file
 from ..retrieval.enricher import QueryEnricher
 from ..retrieval.retrieval import AdaptiveRetriever
 from ..spec.loader import load_graph_config, load_retrieval_config
@@ -66,11 +67,14 @@ def main():
 
     graph.draw() # Optional
     
-    graph.invoke({
+    final_state = graph.invoke({
         'job_description' : HumanMessage(content=query),
         'retrieved_documents': retrieved_docs,
     })
 
+    write_to_file(final_state.get("document", "Error: No Document Found"), "output.txt")
+    write_to_file(final_state.get("summary", "Error: No Summary Found"), "summary.txt")
+    
     # Print console summary
     print("\n" + "="*60)
     print("JOB APPLICATION ASSISTANT - EXECUTION COMPLETE\n\n","="*60)
