@@ -17,9 +17,9 @@ from langchain_community.vectorstores import FAISS
 
 from ..retrieval.chunking import (
     token_count,
-    chunk_cover_letter, 
-    chunk_cv, 
-    chunk_notes, 
+    CVSemanticChunker,
+    CoverLetterChunker,
+    chunk_notes,
     default_chunker
 )
 
@@ -37,7 +37,10 @@ class DataLoader():
         self.documents = None
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.schema_version = "retrieval_fidelity_v1"
+
+        # Initialize the new chunking objects
+        self.cv_chunker = CVSemanticChunker(max_tokens=self.chunk_size)
+        self.cl_chunker = CoverLetterChunker()
 
         self.cv_folder_path = os.path.join(data_path, "CVs")
         self.cl_folder_path = os.path.join(data_path, "CoverLetters")
@@ -111,7 +114,6 @@ class DataLoader():
             "data_path": self.data_path,
             "db_path": self.db_path,
             "doc_list": self.all_files,
-            "schema_version": self.schema_version,
         }
         return metadata
 
@@ -131,52 +133,51 @@ class DataLoader():
 
         return True
 
-    def build_vectorstore(self, embeddings: OpenAIEmbeddings | None = None):
+    def build_vectorstore(self, embeddings: OpenAIEmbeddings | None = None):    
         print(f"{'='*60}\nBuilding Vectorstore")
 
-        # Create embeddings
         if embeddings is None:
             embeddings = OpenAIEmbeddings(api_key=os.getenv("OPENAI_API_KEY"))
         all_docs = []
 
-        # Go through each document type in self.documents, chunking, and adding to the vectorstore
         for docs in self.documents:
             doc_type = docs['type']
 
             for doc in docs['folder']:
                 content = doc.page_content
-                if doc_type == 'cv':
-                    chunks = chunk_cv(content)
-                elif doc_type == 'cl':
-                    chunks = chunk_cover_letter(content)
-                elif doc_type == 'notes':
-                    chunks = chunk_notes(content)
-                else:
-                    chunks = default_chunker(content)
-
                 metadata = deepcopy(doc.metadata)
                 metadata["doc_type"] = doc_type
                 doc_source = metadata.get("source")
-                metadata["source"] = doc_source
+                
+                processed_chunks = []
+                
+                if doc_type == 'cv':
+                    processed_chunks = self.cv_chunker.chunk_cv(content, source=doc_source)
+                elif doc_type == 'cl':
+                    processed_chunks = self.cl_chunker.chunk_cover_letter(content)
+                elif doc_type == 'notes':
+                    chunks = chunk_notes(content)
+                    processed_chunks = [{"text": c, "metadata": {}} for c in chunks]
+                else:
+                    chunks = default_chunker(content)
+                    processed_chunks = [{"text": c, "metadata": {}} for c in chunks]
 
-                doc_chunks = []
-                # Attach metadata to each chunk
                 doc_chunks = [
                     Document(
-                        page_content=chunk,
+                        page_content=chunk_data["text"],
                         metadata={
-                            **metadata,
-                            "chunk_length_tokens": token_count(chunk),
+                            **metadata,           # Original file metadata
+                            **chunk_data["metadata"], # Semantic metadata (company, dates, etc.)
+                            "chunk_length_tokens": token_count(chunk_data["text"]),
                         }
                     )
-                    for chunk in chunks
+                    for chunk_data in processed_chunks
                 ]
                 all_docs.extend(doc_chunks)
 
         vectorstore = FAISS.from_documents(all_docs, embeddings)
         vectorstore.save_local(self.db_path)
 
-        # Store db metadata
         metadata_path = os.path.join(self.db_path, "metadata.json")
         db_metadata = self.generate_db_metadata()
 
@@ -184,7 +185,6 @@ class DataLoader():
             json.dump(db_metadata, f, indent=4)
 
         print("-- Success\n","="*60)
-
         return vectorstore
 
     def load_vectorstore(self, embeddings):

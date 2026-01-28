@@ -1,30 +1,30 @@
+import re
 import tiktoken
 import spacy
 from spacy.language import Language
-from typing import List, Optional
+from typing import List, Optional, Dict, Tuple
+from dataclasses import dataclass, asdict, field
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# Global spaCy model cache
 _nlp_cache: Optional[Language] = None
 
-
 def get_spacy_model() -> Language:
-    """
-    Lazy load spaCy model with sentencizer.
-    Assumes en_core_web_sm is installed.
-    """
+    """Lazy load spaCy model with sentencizer."""
     global _nlp_cache
     if _nlp_cache is None:
-        # Load small model with only sentencizer (fast, accurate)
-        _nlp_cache = spacy.load(
-            "en_core_web_sm",
-            disable=["tok2vec", "tagger", "parser", "ner", "attribute_ruler", "lemmatizer"]
-        )
-        # Explicitly add sentencizer if not present
-        if "sentencizer" not in _nlp_cache.pipe_names:
-            _nlp_cache.add_pipe("sentencizer")
+        try: 
+            _nlp_cache = spacy.load(
+                "en_core_web_sm",
+                disable=["tok2vec", "tagger", "parser", "ner", "attribute_ruler", "lemmatizer"]
+            )
+            if "sentencizer" not in _nlp_cache.pipe_names:
+                _nlp_cache.add_pipe("sentencizer")
+        except OSError as e:
+            raise RuntimeError(
+                "SpaCy model 'en_core_web_sm' is not installed. "
+                "Run: python -m spacy download en_core_web_sm"
+            ) from e
     return _nlp_cache
-
 
 def get_encoding(encoding_name: Optional[str] = None):
     """Get tiktoken encoding for token counting."""
@@ -38,7 +38,6 @@ def get_encoding(encoding_name: Optional[str] = None):
     except Exception as e:
         raise RuntimeError("tiktoken initialization failed") from e
 
-
 def token_count(text: str, encoding=None) -> int:
     """Count tokens in text using tiktoken."""
     if not text:
@@ -46,94 +45,32 @@ def token_count(text: str, encoding=None) -> int:
     enc = encoding or get_encoding()
     return len(enc.encode(text))
 
-
 def sentence_tokenize(text: str) -> List[str]:
-    """
-    Split text into sentences using spaCy's sentencizer.
-    Much more accurate than regex for handling:
-    - Abbreviations (Dr., Inc., etc.)
-    - Decimal numbers (3.14)
-    - Quotes and nested punctuation
-    - Multiple sentence enders
-    """
+    """Split text into sentences using spaCy's sentencizer."""
     cleaned = text.replace("\r", " ").strip()
     if not cleaned:
         return []
     
     nlp = get_spacy_model()
-    
-    # Process text in batches for efficiency if needed
-    # For typical CV/cover letter text, single doc is fine
     doc = nlp(cleaned)
     
     sentences = []
     for sent in doc.sents:
         sent_text = sent.text.strip()
-        if sent_text:  # Only keep non-empty sentences
+        if sent_text:
             sentences.append(sent_text)
     
     return sentences
 
-
-def chunk_sentences_token_budget(
-    sentences: List[str], 
-    max_tokens: int, 
-    overlap_tokens: int,
-    encoding=None
-) -> List[str]:
-    """
-    Chunk sentences respecting token budget with overlap.
-    """
-    if not sentences:
-        return []
-    
-    enc = encoding or get_encoding()
-    chunks = []
-    current = []
-    current_tokens = 0
-
-    for sent in sentences:
-        sent_tokens = token_count(sent, enc)
-        
-        # If adding this sentence exceeds budget, finalize current chunk
-        if current and current_tokens + sent_tokens > max_tokens:
-            chunks.append(" ".join(current))
-            
-            # Calculate overlap: work backwards through current chunk
-            overlap = []
-            overlap_acc = 0
-            for s in reversed(current):
-                s_tokens = token_count(s, enc)
-                if overlap_acc + s_tokens > overlap_tokens:
-                    break
-                overlap.insert(0, s)
-                overlap_acc += s_tokens
-            
-            # Start new chunk with overlap
-            current = overlap.copy()
-            current_tokens = sum(token_count(s, enc) for s in current)
-        
-        current.append(sent)
-        current_tokens += sent_tokens
-
-    # Add final chunk
-    if current:
-        chunks.append(" ".join(current))
-
-    return chunks
-
-
 def split_bullets(text: str) -> List[str]:
     """
     Split text by bullet points or numbered lists.
-    More robust than pure regex - handles nested bullets.
+    Handles nested bullets and continuations.
     """
     lines = text.splitlines()
     bullets = []
     current = []
     
-    # Regex pattern for bullets: -, •, *, or numbered (1., 2., etc.)
-    import re
     bullet_pattern = re.compile(r'^\s*[-•*]\s+|\s*\d+\.\s+')
     
     for line in lines:
@@ -141,134 +78,20 @@ def split_bullets(text: str) -> List[str]:
         if not line_stripped:
             continue
             
-        # Check if line starts with bullet/number
         if bullet_pattern.match(line):
-            # Save previous bullet if exists
             if current:
                 bullets.append(" ".join(current))
             current = [line_stripped]
         else:
-            # Continuation of current bullet
             if current:
                 current.append(line_stripped)
             else:
-                # Standalone line (header, etc.)
                 current = [line_stripped]
     
-    # Add final bullet
     if current:
         bullets.append(" ".join(current))
     
     return [b for b in bullets if b]
-
-
-def chunk_cv(
-    text: str, 
-    max_tokens: int = 450, 
-    overlap_tokens: int = 80
-) -> List[str]:
-    """
-    Chunk CV text by bullet points with token budget.
-    
-    CVs are structured with bullet points, so we:
-    1. Split by bullets first
-    2. Group bullets into chunks respecting token budget
-    3. Add overlap for context
-    """
-    bullets = split_bullets(text)
-    
-    if not bullets:
-        # Fallback to default chunker if no bullets detected
-        return default_chunker(text, chunk_size=max_tokens * 4, chunk_overlap=overlap_tokens * 4)
-
-    enc = get_encoding()
-    chunks = []
-    current = []
-    current_tokens = 0
-
-    for bullet in bullets:
-        bullet_tokens = token_count(bullet, enc)
-        
-        # If single bullet exceeds max, split it with sentence chunker
-        if bullet_tokens > max_tokens:
-            # Finalize current chunk first
-            if current:
-                chunks.append(" ".join(current))
-                current = []
-                current_tokens = 0
-            
-            # Split large bullet by sentences
-            sentences = sentence_tokenize(bullet)
-            sub_chunks = chunk_sentences_token_budget(
-                sentences, 
-                max_tokens, 
-                overlap_tokens, 
-                enc
-            )
-            chunks.extend(sub_chunks)
-            continue
-        
-        # Check if adding bullet exceeds budget
-        if current and current_tokens + bullet_tokens > max_tokens:
-            chunks.append(" ".join(current))
-            
-            # Calculate overlap
-            overlap = []
-            overlap_acc = 0
-            for b in reversed(current):
-                b_tokens = token_count(b, enc)
-                if overlap_acc + b_tokens > overlap_tokens:
-                    break
-                overlap.insert(0, b)
-                overlap_acc += b_tokens
-            
-            current = overlap.copy()
-            current_tokens = sum(token_count(b, enc) for b in current)
-        
-        current.append(bullet)
-        current_tokens += bullet_tokens
-
-    # Add final chunk
-    if current:
-        chunks.append(" ".join(current))
-
-    return chunks
-
-
-def chunk_cover_letter(
-    text: str, 
-    max_tokens: int = 450, 
-    overlap_tokens: int = 120
-) -> List[str]:
-    """
-    Chunk cover letter using sentence-aware splitting.
-    """
-    sentences = sentence_tokenize(text)
-    return chunk_sentences_token_budget(
-        sentences,
-        max_tokens=max_tokens,
-        overlap_tokens=overlap_tokens,
-    )
-
-
-def chunk_notes(
-    text: str, 
-    max_tokens: int = 400, 
-    overlap_tokens: int = 120
-) -> List[str]:
-    """
-    Chunk notes using sentence-aware splitting.
-    
-    Notes can be mixed format, so use sentence splitting
-    with moderate overlap.
-    """
-    sentences = sentence_tokenize(text)
-    return chunk_sentences_token_budget(
-        sentences,
-        max_tokens=max_tokens,
-        overlap_tokens=overlap_tokens,
-    )
-
 
 def default_chunker(
     text: str, 
@@ -287,38 +110,144 @@ def default_chunker(
     )
     return splitter.split_text(text)
 
+def chunk_notes(
+    text: str, 
+    ) -> List[str]:
 
-def token_length(text: str) -> int:
-    """Convenience function for token counting."""
-    return token_count(text)
+    return sentence_tokenize(text)
 
+@dataclass
+class ChunkMetadata:
+    chunk_id: str
+    chunk_type: str
+    section: str
+    token_count: int
+    source_document: Optional[str] = None
+    # Flexible fields for specific types
+    company: str = ""; role: str = ""; dates: str = ""
+    start_date: Optional[str] = None; end_date: Optional[str] = None
+    bullets: List[str] = field(default_factory=list)
+    category: str = ""; skills_list: List[str] = field(default_factory=list)
 
-def chunk_large_document(
-    text: str,
-    max_tokens: int = 450,
-    overlap_tokens: int = 120,
-    batch_size: int = 10000
-) -> List[str]:
-    """
-    Chunk very large documents by processing in batches.
-    Useful for 100+ page documents to avoid memory issues.
-    """
-    if len(text) <= batch_size:
-        return chunk_notes(text, max_tokens, overlap_tokens)
-    
-    # Split into batches
-    all_chunks = []
-    start = 0
-    
-    while start < len(text):
-        end = min(start + batch_size, len(text))
-        batch = text[start:end]
+class CVSemanticChunker:
+    def __init__(self, max_tokens: int = 800):
+        self.max_tokens = max_tokens
+        self.enc = get_encoding()
+        self.sect_re = re.compile(r'^(EXPERIENCE|EDUCATION|PROJECTS|SKILLS|SUMMARY|PROFILE)', re.I | re.M)
+        self.date_re = re.compile(r'(\d{2}/\d{4}|\d{4})\s*[-–—]\s*(\d{2}/\d{4}|\d{4}|Present|Current)', re.I)
+
+    def chunk_cv(self, text: str, source: str = None) -> List[Dict]:
+        chunks = []
+        # Split into sections
+        matches = list(self.sect_re.finditer(text))
+        if not matches: return self._create_chunks([text], "CONTENT", "fallback", source)
+
+        for i, m in enumerate(matches):
+            name, start = m.group(1).upper(), m.end()
+            end = matches[i+1].start() if i+1 < len(matches) else len(text)
+            content = text[start:end].strip()
+            
+            if name in ['EXPERIENCE', 'PROJECTS']:
+                chunks.extend(self._process_jobs(content, name, source, len(chunks)))
+            elif name == 'SKILLS':
+                chunks.extend(self._process_skills(content, name, source, len(chunks)))
+            else:
+                chunks.extend(self._create_chunks([content], name, "section", source, len(chunks)))
+        return chunks
+
+    def _process_jobs(self, text: str, sect: str, src: str, start_idx: int) -> List[Dict]:
+        job_chunks = []
+        dates = list(self.date_re.finditer(text))
+        if not dates: return self._create_chunks([text], sect, "job", src, start_idx)
+
+        for i, m in enumerate(dates):
+            job_start = max(0, m.start() - 150) # Catch header
+            job_end = dates[i+1].start() if i+1 < len(dates) else len(text)
+            job_text = text[job_start:job_end].strip()
+            
+            # Extract header info
+            header = job_text.split('\n')[0]
+            parts = [p.strip() for p in header.replace(m.group(0), "").split(',')]
+            comp, role = (parts[0], parts[1]) if len(parts) >= 2 else ("", parts[0] if parts else "")
+            
+            job_chunks.extend(self._create_chunks([job_text], sect, "job", src, start_idx + len(job_chunks), 
+                                                 company=comp, role=role, dates=m.group(0)))
+        return job_chunks
+
+    def _process_skills(self, text: str, sect: str, src: str, idx: int) -> List[Dict]:
+        # Split by lines containing colons (categories)
+        lines = [l.strip() for l in text.split('\n') if l.strip()]
+        return self._create_chunks(lines, sect, "skills", src, idx)
+
+    def _create_chunks(self, items: List[str], sect: str, c_type: str, src: str, start_idx: int, **extra) -> List[Dict]:
+        res = []
+        curr_text, curr_tokens = [], 0
         
-        # Process batch
-        batch_chunks = chunk_notes(batch, max_tokens, overlap_tokens)
-        all_chunks.extend(batch_chunks)
-        
-        # Move to next batch with overlap
-        start = end - (overlap_tokens * 10)  # Rough estimate: 10 chars per token
+        for item in items:
+            tokens = token_count(item, self.enc)
+            if curr_text and (curr_tokens + tokens > self.max_tokens):
+                res.append(self._finalize(curr_text, sect, c_type, src, f"{start_idx}_{len(res)}", curr_tokens, **extra))
+                curr_text, curr_tokens = [], 0
+            curr_text.append(item); curr_tokens += tokens
+            
+        if curr_text:
+            res.append(self._finalize(curr_text, sect, c_type, src, f"{start_idx}_{len(res)}", curr_tokens, **extra))
+        return res
+
+    def _finalize(self, texts: List[str], sect: str, c_type: str, src: str, cid: str, tks: int, **extra) -> Dict:
+        full_text = "\n".join(texts)
+        meta = ChunkMetadata(chunk_id=cid, chunk_type=c_type, section=sect, token_count=tks, source_document=src, **extra)
+        if c_type == "job": meta.bullets = split_bullets(full_text)
+        return {"text": full_text, "metadata": asdict(meta)}
+
+class CoverLetterChunker:
+    """
+    Chunk cover letters by paragraph with type classification.
     
-    return all_chunks
+    Improvements:
+    - Better paragraph type detection
+    - Token counting in metadata
+    - Handles multi-paragraph intros/closings
+    """
+    
+    def __init__(self):
+        self.encoding = get_encoding()
+    
+    def chunk_cover_letter(
+        self, 
+        letter_text: str, 
+    ) -> List[Dict[str, any]]:
+        """
+        Returns chunks with metadata.
+        
+        Returns:
+            [
+                {
+                    'text': 'paragraph text...',
+                    'metadata': CoverLetterChunkMetadata(...),
+                },
+                ...
+            ]
+        """
+        # Split by double newlines (paragraph boundaries)
+        paragraphs = [p.strip() for p in letter_text.split('\n\n') if p.strip()]
+        
+        if not paragraphs:
+            return []
+        
+        chunks = []
+        
+        for i, para in enumerate(paragraphs):            
+            metadata = ChunkMetadata(
+                chunk_id=f"cl_{i}",
+                chunk_type="cover_letter_paragraph",
+                section="COVER_LETTER",
+                token_count=token_count(para, self.encoding),
+            )
+            
+            chunks.append({
+                'text': para,
+                'metadata': metadata
+            })
+        
+        return chunks
