@@ -36,7 +36,7 @@ class QueryEnricher():
             event_name="semantic_alignment", 
             event_metadata={
                 "summary": query, 
-                "aligned_query": agent_ouptut.requirement
+                "aligned_query": agent_ouptut.requirements
             }
         )
 
