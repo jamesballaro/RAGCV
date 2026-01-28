@@ -67,6 +67,7 @@ class GraphConfig(BaseModel):
         return cls(**cfg_dict)
 
 class RetrievalConfig(BaseModel):
+    rag_threshold: int = 10000
     base_k: int = 10
     mmr_k: int = 5
     mmr_lambda: float = 0.6
@@ -78,8 +79,6 @@ class RetrievalConfig(BaseModel):
     use_hybrid: bool = True
     bm25_weight: float = 0.5
     embedding_weight: float = 0.5
-
-
 
     @field_validator("base_k", "min_high_score", "mmr_k")
     @classmethod

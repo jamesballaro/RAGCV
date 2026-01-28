@@ -6,8 +6,8 @@
 # - BM25 (lexical/keyword matching)
 # - MMR (diversity)
 # - Deduplication
-
-base_k: 10                    
+rag_threshold: 1000000
+base_k: 10                
 score_threshold: 0.15         
 min_high_score: 5             
 
@@ -17,5 +17,5 @@ embedding_weight: 0.5
 
 dedupe_threshold: 0.88        
 
-mmr_k: 5                      
+mmr_k: 10
 mmr_lambda: 0.6               

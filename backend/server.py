@@ -45,14 +45,17 @@ async def lifespan(app: FastAPI):
     print("="*60)
     
     # 1. Initialize Vectorstore
-    loader = DataLoader(data_path="data", db_path="data/db.faiss")
+    loader = DataLoader(data_path="data_real/", db_path="data/db.faiss")
     embeddings = OpenAIEmbeddings()
     vectorstore = loader.load_vectorstore(embeddings=embeddings)
+    documents = loader.get_documents()
+
     
     # 2. Setup Retriever
     retrieval_cfg = load_retrieval_config(path="config/retrieval.yml")
     app.state.retriever = AdaptiveRetriever(
         vectorstore=vectorstore, 
+        documents=documents,
         embeddings=embeddings, 
         config=retrieval_cfg
     )

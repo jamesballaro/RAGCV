@@ -9,8 +9,11 @@ from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from rank_bm25 import BM25Okapi
 
+from .chunking import chunk_query, token_count
+
 @dataclass
 class AdaptiveRetrieverConfig:
+    rag_threshold: int = 10000
     base_k: int = 10
     mmr_k: int = 5
     mmr_lambda: float = 0.6
@@ -28,12 +31,14 @@ class AdaptiveRetriever:
     def __init__(
         self,
         vectorstore,
+        documents: List,
         embeddings: OpenAIEmbeddings,
         config: Optional[AdaptiveRetrieverConfig] = None,
     ):
         self.vectorstore = vectorstore
+        self.documents = documents
         self.embeddings = embeddings
-        self.config = config or AdaptiveRetrieverConfig()
+        self.config = config
         
         # Initialize BM25 index if hybrid retrieval is enabled
         self.bm25 = None
@@ -63,22 +68,32 @@ class AdaptiveRetriever:
             self.bm25 = None
 
     def invoke(self, query: str) -> List[Document]:
-        ranked = self.adaptive_retrieval(
-            query=query,
-            vectorstore=self.vectorstore,
-            embeddings=self.embeddings,
-            config=self.config,
-        )
-        documents: List[Document] = []
-        for doc, score in ranked:
-            metadata = dict(doc.metadata)
-            metadata["retrieval_score"] = float(score)
-            documents.append(
-                Document(
-                    page_content=doc.page_content,
-                    metadata=metadata,
+        corpus_token_count = token_count("".join([doc.page_content for doc in self.documents]))
+
+        if  corpus_token_count > self.config.rag_threshold:
+            print(f"\n{'='*60}\nTotal Token Count in Corpus: {corpus_token_count}\nConfigurated RAG Token Threshold: {self.config.rag_threshold}\nRunning RAG")
+            ranked = self.adaptive_retrieval(
+                query=query,
+                vectorstore=self.vectorstore,
+                embeddings=self.embeddings,
+                config=self.config,
+            )        
+            documents: List[Document] = []
+            for doc, score in ranked:
+                metadata = dict(doc.metadata)
+                metadata["retrieval_score"] = float(score)
+                documents.append(
+                    Document(
+                        page_content=doc.page_content,
+                        metadata=metadata,
+                    )
                 )
-            )
+        else:
+            print(f"\n{'='*60}\nTotal Token Count in Corpus: {corpus_token_count}\nConfigurated RAG Token Threshold: {self.config.rag_threshold}\nNOT Running RAG")
+            documents = self.documents
+
+        char_count = len("".join([doc.page_content for doc in documents]))
+        print(f"\t-Using {len(documents)} Documents\n\t-Total character count:{char_count}\n{'='*60}\n")
         return documents
 
     def adaptive_retrieval(
@@ -89,14 +104,34 @@ class AdaptiveRetriever:
         config: AdaptiveRetrieverConfig,
     ) -> List[Tuple[Document, float]]:
         
-        if config.use_hybrid and self.bm25 is not None:
-            candidates = self._hybrid_search(query, config)
-        else:
-            candidates = _run_vectorstore_search(
-                query=query,
-                vectorstore=vectorstore,
-                k=config.base_k,
-            )
+        query_chunks = chunk_query(query)
+
+
+
+        all_candidates = {}
+
+        for q in query_chunks:
+            if config.use_hybrid and self.bm25 is not None:
+                results = self._hybrid_search(q, config)
+            else:
+                results = _run_vectorstore_search(
+                    query=q,
+                    vectorstore=vectorstore,
+                    k=config.base_k,
+                )
+
+            for doc, score in results:
+                doc_id = id(doc)
+                # Max-score pooling across query chunks
+                if doc_id not in all_candidates:
+                    all_candidates[doc_id] = (doc, float(score))
+                else:
+                    all_candidates[doc_id] = (
+                        doc,
+                        max(all_candidates[doc_id][1], float(score))
+                    )
+
+        candidates = list(all_candidates.values())
         
         # Filter by threshold
         candidates = [

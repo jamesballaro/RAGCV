@@ -25,24 +25,26 @@ def main():
     parser.add_argument("--test_name", default=time)
     args = parser.parse_args()
 
-    loader = DataLoader(data_path="data", db_path="data/db.faiss")
+    log_path = f"logs/agent_runs_{args.test_name}.jsonl"
+
+    loader = DataLoader(data_path="data_real/", db_path="data/db.faiss")
     embeddings = OpenAIEmbeddings()
+    logger = JSONLLogger(log_path=log_path)
 
     # Construct vectorstore (either done from local save or re-generated if new data is present)
+    documents = loader.get_documents()
     vectorstore = loader.load_vectorstore(embeddings=embeddings)
-        
-    # Logging
-    log_path = f"logs/agent_runs_{args.test_name}.jsonl"
-    logger = JSONLLogger(log_path=log_path)
-    
+            
     # Setting up RAG
     retrieval_cfg = load_retrieval_config(path="config/retrieval.yml")
     
     retriever = AdaptiveRetriever(
         vectorstore=vectorstore, 
+        documents=documents,
         embeddings=embeddings,
         config=retrieval_cfg
     )
+
     enricher = QueryEnricher(retriever=retriever,logger=logger)
 
     # Set up the tools to pass to agents
@@ -61,10 +63,8 @@ def main():
     with open("input/query.txt", "r") as f:
         query = f.read()
 
-    # message = enricher.enrich_with_context(query)
-
     retrieved_docs = enricher.get_retrieved_artifacts(query) 
-
+    
     graph.draw() # Optional
     
     final_state = graph.invoke({

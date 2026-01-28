@@ -16,7 +16,7 @@ from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 
 from ..retrieval.chunking import (
-    token_count, 
+    token_count,
     chunk_cover_letter, 
     chunk_cv, 
     chunk_notes, 
@@ -40,7 +40,7 @@ class DataLoader():
         self.schema_version = "retrieval_fidelity_v1"
 
         self.cv_folder_path = os.path.join(data_path, "CVs")
-        self.cl_folder_path = os.path.join(data_path, "Cover Letters")
+        self.cl_folder_path = os.path.join(data_path, "CoverLetters")
         self.notes_folder_path = os.path.join(data_path, "Notes")
 
         self.load()
@@ -85,6 +85,10 @@ class DataLoader():
 
         self.all_files = [doc.metadata["source"] for doc in self.all_cvs + self.all_cls + self.all_notes]
         return
+
+    def get_documents(self):
+        all_content = [doc for doc in self.all_cvs + self.all_cls + self.all_notes]
+        return all_content
 
     def create_loader(self, filename, folder):
         full_path = os.path.join(folder, filename)
@@ -155,6 +159,7 @@ class DataLoader():
                 doc_source = metadata.get("source")
                 metadata["source"] = doc_source
 
+                doc_chunks = []
                 # Attach metadata to each chunk
                 doc_chunks = [
                     Document(
@@ -193,7 +198,7 @@ class DataLoader():
                     allow_dangerous_deserialization=True
             )
         return vectorstore
-
+    
 def compile_docs(loaders, folder: List[Document], doc_type: str):
     for loader in loaders:
         documents = loader.load()
