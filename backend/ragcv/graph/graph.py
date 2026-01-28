@@ -126,6 +126,9 @@ class RouterGraph:
         if status:
             pathway = 'END' if status == 'PASS' else route_map[task]
 
+        if pathway == 'END':
+            return "END"
+        
         # Handle invalid pathway:
         if pathway not in self.graph.nodes.keys():
             print(f"[Error: Invalid pathway: {pathway}]")
