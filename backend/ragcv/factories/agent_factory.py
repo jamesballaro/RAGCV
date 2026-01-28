@@ -27,12 +27,13 @@ class SpecialisedAgentFactory(BaseAgentFactory):
             "output_parser": output_parser,
         }
 
-    def create_agent(self, name: str, logger: JSONLLogger, tools: List = None,) -> Agent:
+    def create_agent(self, name: str, tools: list = None, **kwargs) -> Agent:
         role = self.determine_role(name)
-        
+
         return Agent(
-            name = name,
-            prompt = role['prompt'],
+            name=name,
+            prompt=role['prompt'],
             output_parser=role['output_parser'],
             tools=tools,
+            **kwargs
         )
