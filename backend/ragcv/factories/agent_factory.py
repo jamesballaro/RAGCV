@@ -8,11 +8,8 @@ from ..utils.logger import JSONLLogger
 
 
 class BaseAgentFactory:
-    # ADD LLM CONFIG
     def __init__(self):
         self.prompt_factory = PromptFactory()
-        #Add config here?
-        self.llm_config = None
 
     def create_agent(self) -> Agent:
         pass
@@ -38,5 +35,4 @@ class SpecialisedAgentFactory(BaseAgentFactory):
             prompt = role['prompt'],
             output_parser=role['output_parser'],
             tools=tools,
-            # llm_config = self.config
         )

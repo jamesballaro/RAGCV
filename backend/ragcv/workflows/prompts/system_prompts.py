@@ -106,11 +106,6 @@ GUIDELINES
 - **Red Flags:** If the JD contains unrealistic expectations, note them at the very bottom.
 
 =====================================================================
-JOB DESCRIPTION
-=====================================================================
-{job_description}
-
-=====================================================================
 INTERNAL EXECUTION STEPS (DO NOT OUTPUT OR LABEL)
 =====================================================================
 

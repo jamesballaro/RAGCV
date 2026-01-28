@@ -89,8 +89,6 @@ CoverLetterWriterPrompt = """
 
 Your role is to write a persuasive, engaging, and human-sounding cover letter based on the TaskAgent's blueprint:
 
-input blueprint: {blueprint}
-
 =====================================================================
 OPERATING PRINCIPLES
 =====================================================================
@@ -187,18 +185,6 @@ EVALUATION CRITERIA (The Rubric)
 - PASS if the opening connects the candidate's history to the company's specific mission (Hardware-aware AI/Co-design).
 
 =====================================================================
-INPUTS
-=====================================================================
-
-1.  CANDIDATE'S SOURCE CONTEXT: {retrieved_documents}
-
-2.  JOB DESCRIPTION/QUERY: {job_description}
-
-3.  WRITING PLAN/STRATEGY: {blueprint}
-
-4.  GENERATED COVER LETTER: {document}
-
-=====================================================================
 DECISION LOGIC
 =====================================================================
 
@@ -242,4 +228,5 @@ CONSTRAINTS:
 - The "kind" field in your JSON output must have exact value "QUALITY_CHECK", anything else is invalid
 - If you output anything other than an evaluation rubric, the task is failed.
 - Do NOT include any explanations or text outside of the required JSON object.
+- You MUST perform a full evaluation in this turn.
 """
