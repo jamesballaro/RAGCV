@@ -2,6 +2,7 @@ from .output_models import *
 
 PYDANTIC_REGISTRY = {
     "Summary_Agent": SummaryAgentOutputModel,
+    "Semantic_Alignment_Agent": SemanticAlignmentAgentOutputModel,
     "CV_Task_Agent": CVTaskAgentOutputModel,
     "CV_Agent": CVAgentOutputModel,
     "CL_Task_Agent": CLTaskAgentOutputModel,

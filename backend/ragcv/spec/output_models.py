@@ -8,6 +8,10 @@ class SummaryAgentOutputModel(BaseModel):
         description="Either 'Cover Letter' or 'CV' depending on what the user asks for in the query"
     )
     summary: str
+class SemanticAlignmentAgentOutputModel(BaseModel):
+    requirements: List[str] = Field(
+        description="List of achievement-framed requirements extracted from job summary"
+    )
 
 class QualityCheckerAgentOutputModel(BaseModel):
     kind: Literal["QUALITY_CHECK"] = "QUALITY_CHECK"

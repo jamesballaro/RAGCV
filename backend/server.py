@@ -50,13 +50,11 @@ async def lifespan(app: FastAPI):
     vectorstore = loader.load_vectorstore(embeddings=embeddings)
     documents = loader.get_documents()
 
-    
     # 2. Setup Retriever
     retrieval_cfg = load_retrieval_config(path="config/retrieval.yml")
     app.state.retriever = AdaptiveRetriever(
         vectorstore=vectorstore, 
         documents=documents,
-        embeddings=embeddings, 
         config=retrieval_cfg
     )
     
@@ -99,7 +97,7 @@ async def run_graph_task(task_id: str, input_text: str, retriever: AdaptiveRetri
     Executes the RAG pipeline. 
     Note: retriever is passed from app.state at the time of task creation.
     """
-    log_path = f"logs/task_{task_id}.jsonl"
+    log_path = f"logs/ragcv_app_log{task_id}.jsonl"
     output_dir = f"output/{task_id}"
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs("logs", exist_ok=True)
@@ -111,17 +109,11 @@ async def run_graph_task(task_id: str, input_text: str, retriever: AdaptiveRetri
         enricher = QueryEnricher(retriever=retriever, logger=task_logger)
         tools_list = build_registry(test_name=task_id) 
         
-        graph_cfg = load_graph_config(path="config/graph.yml", tools=tools_list, logger=task_logger)
+        graph_cfg = load_graph_config(path="config/graph.yml", tools=tools_list, logger=task_logger, enricher=enricher)
         graph = RouterGraph(agents=graph_cfg, logger=task_logger)
-
-        # Step 1: Enrichment
-        retrieved_docs = await asyncio.to_thread(enricher.get_retrieved_artifacts, input_text)
-         
-        tasks[task_id]["artifacts"] = retrieved_docs
 
         graph_input = {
             'job_description': HumanMessage(content=input_text),
-            'retrieved_documents': retrieved_docs,
         }
 
         # Step 2: Graph Execution
@@ -143,7 +135,7 @@ async def run_graph_task(task_id: str, input_text: str, retriever: AdaptiveRetri
 
 @app.post("/query")
 async def start_query(request: QueryRequest, background_tasks: BackgroundTasks):
-    task_id = f"task_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    task_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     tasks[task_id] = {
         "status": "pending", 
         "result": None, 

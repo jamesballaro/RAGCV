@@ -31,6 +31,21 @@ class PromptFactory:
                 ],
             )
 
+        elif prompt_type == "Semantic_Alignment_Agent":
+            prompt = ChatPromptTemplate(
+                messages=[
+                    SystemMessagePromptTemplate.from_template(
+                        SystemPrompt + "\n\n" + SemanticAlignmentAgentPrompt
+                    ),
+                    HumanMessagePromptTemplate.from_template(
+                        "Input job description summary: {summary}"
+                    )
+                ],
+                input_variables=[
+                    'summary'
+                ],
+            )
+
         # COVER LETTER PATHWAY
         elif prompt_type == "CL_Task_Agent":
             prompt = ChatPromptTemplate(

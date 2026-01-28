@@ -9,11 +9,11 @@ from dotenv import load_dotenv
 
 from ..core.loader import DataLoader
 from ..graph.graph import RouterGraph
-from ..tools.tools import build_registry
 from ..utils.logger import JSONLLogger
-from ..utils.file import write_to_file
 from ..retrieval.enricher import QueryEnricher
 from ..retrieval.retrieval import AdaptiveRetriever
+from ..tools.tools import build_registry
+from ..utils.file import write_to_file
 from ..spec.loader import load_graph_config, load_retrieval_config
 
 def main():
@@ -25,7 +25,7 @@ def main():
     parser.add_argument("--test_name", default=time)
     args = parser.parse_args()
 
-    log_path = f"logs/agent_runs_{args.test_name}.jsonl"
+    log_path = f"logs/ragcv_headless_log_{args.test_name}.jsonl"
 
     loader = DataLoader(data_path="data_real/", db_path="data/db.faiss")
     embeddings = OpenAIEmbeddings()
@@ -41,8 +41,8 @@ def main():
     retriever = AdaptiveRetriever(
         vectorstore=vectorstore, 
         documents=documents,
-        embeddings=embeddings,
-        config=retrieval_cfg
+        config=retrieval_cfg,
+        logger=logger
     )
 
     enricher = QueryEnricher(retriever=retriever,logger=logger)
@@ -55,6 +55,7 @@ def main():
         path="config/graph.yml",
         tools=tools_list,
         logger=logger,
+        enricher=enricher
     )
 
     # Construct graph
@@ -62,14 +63,11 @@ def main():
 
     with open("input/query.txt", "r") as f:
         query = f.read()
-
-    retrieved_docs = enricher.get_retrieved_artifacts(query) 
     
     graph.draw() # Optional
     
     final_state = graph.invoke({
         'job_description' : HumanMessage(content=query),
-        'retrieved_documents': retrieved_docs,
     })
 
     write_to_file(final_state.get("document", "Error: No Document Found"), "output.txt")
