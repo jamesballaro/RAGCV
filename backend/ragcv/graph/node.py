@@ -1,20 +1,59 @@
+import time
+import traceback
+
 from typing import Dict, Any, Sequence, List
+import time
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.outputs import LLMResult
 
 from ..workflows.processor import StateProcessor
 from ..core.agent import Agent
+class LatencyMonitorCallback(BaseCallbackHandler):
+    def __init__(self):
+        self.start_time = 0.0
+        self.first_token_time = 0.0
+        self.token_count = 0
+        self.metrics = {}
+
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        self.start_time = time.time()
+
+    def on_llm_new_token(self, token: str, **kwargs):
+        if self.token_count == 0:
+            self.first_token_time = time.time()
+            self.metrics["ttft"] = self.first_token_time - self.start_time
+        self.token_count += 1
+
+    def on_llm_end(self, response: LLMResult, **kwargs):
+        end_time = time.time()
+        total_time = end_time - self.start_time
+
+        self.metrics["total_time"] = total_time
+        self.metrics["token_count"] = self.token_count
+
+        if self.first_token_time > 0:
+            gen_time = end_time - self.first_token_time
+            self.metrics["generation_time"] = gen_time
+            self.metrics["tokens_per_second"] = (
+                self.token_count / gen_time if gen_time > 0 else 0.0
+            )
+        else:
+            self.metrics["generation_time"] = None
+            self.metrics["tokens_per_second"] = None
 
 class AgentNodeWrapper:
     def __init__(
             self,
             agent: Agent,
             agent_name: str,
-            logger
+            logger,
+            enricher
         ):
         self.agent = agent
         self.agent_name = agent_name
         self.logger = logger
-
-        self.processor = StateProcessor(agent_name)
+        self.enricher = enricher
+        self.processor = StateProcessor(agent_name, enricher)
     
     def __call__(self, state: Dict[Any,Any]):
         print(f'{"="*60}\nAgent called: {self.agent_name}\n{"="*60}')
@@ -22,12 +61,26 @@ class AgentNodeWrapper:
         max_retries = 3
         retry_count = 0
 
+        print(f'\t* Preparing input: {self.agent_name}')
         input_data = self.processor.prepare_input(state) 
         output_state = None
 
         while not passed_validation and retry_count < max_retries:
             try: 
-                output_data, tool_result  = self.agent.invoke(input_data)
+                print(f'\t* Invoking agent: {self.agent_name}')
+                
+                start_time = time.time()
+                callback = LatencyMonitorCallback()
+                
+                output_data, tool_result = self.agent.invoke(
+                    input_data,
+                    callbacks=lambda: callback
+                )
+                elapsed_time = time.time() - start_time
+                
+                latency_metrics = callback.metrics
+
+                print(f"\t* Agent invocation took {elapsed_time:.2f} seconds")
 
                 tool_logs = self.process_tool_call(tool_result, self.agent.tools)
             
@@ -35,8 +88,10 @@ class AgentNodeWrapper:
                     agent_name=self.agent_name,
                     input_message=input_data,
                     output_message=output_data,
-                    tool_logs=tool_logs if tool_logs else {}
+                    tool_logs=tool_logs if tool_logs else {},
+                    latency_metrics=latency_metrics
                 )
+                print(f'\t* Preparing output: {self.agent_name}\n')
 
                 output_state = self.processor.prepare_output(output_data, state) 
 
@@ -45,7 +100,12 @@ class AgentNodeWrapper:
 
             except Exception as e:
                 retry_count += 1
-                self.logger.log_agent_error(agent_name=self.agent_name, error_message=str(e))
+                tb_str = traceback.format_exc()
+                self.logger.log_agent_error(
+                    agent_name=self.agent_name, 
+                    error_message=str(e),
+                    traceback=tb_str
+                )
                 print(f"{'='*60}\nError whilst invoking agent {self.agent_name}: {e}\n{'='*60}")
                 print(f"{'='*60}\nAttempting re-run of {self.agent_name}\n{'='*60}")
 

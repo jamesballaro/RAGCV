@@ -28,7 +28,10 @@ class JSONLLogger:
             **payload,
         }
         # JSONL for easier parsing
-        serialized = json.dumps(entry, default=self._fallback_serializer)
+        if 'app' in self.log_path:
+            serialized = json.dumps(entry, default=self._fallback_serializer)
+        else: 
+            serialized = json.dumps(entry, indent=4, default=self._fallback_serializer)
         with self._lock:
             with open(self.log_path, "a", encoding="utf-8") as log_file:
                 log_file.write(serialized + "\n")
@@ -47,30 +50,45 @@ class JSONLLogger:
         agent_name: str, 
         input_message: List[AnyMessage] | None,
         output_message: List[AnyMessage],
-        tool_logs: List[dict]) -> None:
+        tool_logs: List[dict],
+        latency_metrics: dict) -> None:
         
         payload={
             "agent_name": agent_name,
             "event": "agent_invocation",
+            "latency_metrics": latency_metrics,
             
             # Take last message
             "input_message": input_message,
             "output_message": output_message,
             "tool_calls": tool_logs,
+
         }
+    
         self.log(payload=payload)
         self.conversation_log.append(payload)
     
-    def log_agent_error(self, agent_name, error_message):
+    def log_event(
+        self,
+        event_name,
+        event_metadata) -> None:
+
+        payload = {
+            "event": event_name,
+            **event_metadata
+        }
+        self.log(payload=payload)
+
+    def log_agent_error(self, agent_name, error_message, traceback):
         payload={
             "agent_name": agent_name,
             "event": "agent_invocation",
-            "error_message": error_message
+            "error_message": error_message,
+            "traceback": traceback
         }
         self.log(payload=payload)
         self.conversation_log.append(payload)
 
-   
     def log_conversation(self) -> None:
         conversation = []
         for message in self.conversation_log:
@@ -87,6 +105,7 @@ class JSONLLogger:
                 "full_conversation": conversation
             }
         )
+
     def get_conversation_log(self) -> None:
         conversation = []
         for message in self.conversation_log:

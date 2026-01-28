@@ -43,14 +43,15 @@ class Agent:
                 self.output_parser, method="function_calling"
             )
 
-    def invoke(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def invoke(self, input_data: Dict[str, Any], callbacks = None) -> Dict[str, Any]:
 
         tool_result = None
         
         if self.tool_chain:
             tool_result = self.tool_chain.invoke(input_data)
             
-        result = self.chain.invoke(input_data)
+        config = {"callbacks": [callbacks()]} if callbacks else {}
+        result = self.chain.invoke(input_data, config=config)
 
         return result, tool_result
             
