@@ -27,12 +27,8 @@ INPUT PROCESSING (CRITICAL)
    - You MUST update the 'CONTENT_STRATEGY' to explicitly address the fix (e.g., 'Instruction: Rewrite Paragraph 2 to include the term Topological Insulators').
    - Emphasize the missing details in the 'MUST_INCLUDE_DETAILS' section.
 
-
-INPUT:
-{task_agent_input}
-
-RETRIEVED DOCUMENTS (CANDIDATE BACKGROUND INFORMATION):
-{retrieved_documents}
+In either case, you will be given retrieved documents that detail the candidates background and experience. 
+You must use information from these documents to enhance the blueprint in describing a perfectly tailored cover letter.
 
 =====================================================================
 OUTPUT SCHEMA (MARKDOWN — INTERNAL, NOT FINAL)

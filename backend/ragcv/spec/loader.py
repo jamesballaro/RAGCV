@@ -11,7 +11,8 @@ from ..graph.node import AgentNodeWrapper
 def load_graph_config(
     path: str | Path,
     tools: Any,
-    logger: Any
+    logger: Any,
+    enricher: Any,
 ) -> List[Dict[str, Any]]:
     """
     Load graph configuration and construct Agent objects.
@@ -28,13 +29,13 @@ def load_graph_config(
             agent = agent_factory.create_agent(
                 name=spec.name,
                 tools=tools,
-                logger=logger
             )
 
             node = AgentNodeWrapper(
                     agent=agent, 
                     agent_name=spec.name,
-                    logger=logger
+                    logger=logger,
+                    enricher=enricher
                 )
             
         except Exception as e:
