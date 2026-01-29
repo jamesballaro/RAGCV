@@ -1,0 +1,44 @@
+Role
+
+Junior Data Analyst — Beverage Optimisation Team
+
+Company
+
+LemonCorp Analytics
+
+⸻
+
+About the Team
+
+The Beverage Optimisation Team partners with product, marketing, and engineering departments to improve pricing, demand forecasting, and customer engagement across LemonCorp’s global beverage portfolio. We focus on transforming raw transactional data into actionable insights that inform strategic decisions.
+
+⸻
+
+Responsibilities
+	•	Analyze large-scale, multi-year sales datasets to uncover trends in revenue, seasonality, and customer behavior
+	•	Build predictive models to forecast beverage demand under varying environmental and economic conditions
+	•	Develop dashboards and reporting tools for senior stakeholders using SQL and modern data visualization platforms
+	•	Design and evaluate controlled experiments to optimize pricing and promotional strategies
+	•	Collaborate with data engineers to improve data pipelines, quality checks, and model deployment workflows
+
+⸻
+
+Required Skills
+	•	Strong proficiency in Python for data analysis and modeling
+	•	Working knowledge of SQL for querying relational databases
+	•	Experience applying statistical methods such as regression, hypothesis testing, and A/B experimentation
+	•	Ability to clearly communicate analytical findings to both technical and non-technical audiences
+	•	Comfort working with incomplete or noisy data
+
+⸻
+
+Nice to Have
+	•	Background in food, beverage, or consumer goods industries
+	•	Entrepreneurial experience or experience running small independent projects
+	•	Interest in experimentation-driven decision making
+
+⸻
+
+Why This Is a Good Fit (Conceptually)
+
+We value curiosity, ownership, and a willingness to learn—especially when paired with strong analytical fundamentals.

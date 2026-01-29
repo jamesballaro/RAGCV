@@ -1,0 +1,40 @@
+# =====================================================================
+# GRAPH CONFIGURATION
+# =====================================================================
+
+agents:
+  - name: Summary_Agent
+    temperature: 0.6
+    rank: 0
+    conditional_links:
+    - CV_Task_Agent
+    - CL_Task_Agent
+
+  - name: CV_Task_Agent
+    rank: 1
+    hard_links:
+      - CV_Agent
+
+  - name: CV_Agent
+    rank: 2
+    hard_links:
+      - Quality_Checker_Agent
+
+  - name: CL_Task_Agent
+    rank: 1
+    hard_links:
+      - CL_Agent
+
+  - name: CL_Agent
+    rank: 2
+    hard_links:
+      - Quality_Checker_Agent
+
+  - name: Quality_Checker_Agent
+    rank: 3
+    conditional_links:
+    - CV_Task_Agent
+    - CL_Task_Agent
+
+
+    

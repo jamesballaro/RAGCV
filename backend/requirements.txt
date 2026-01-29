@@ -11,3 +11,7 @@ unstructured_inference
 pdfminer.six
 pi_heif
 pillow
+spacy 
+rank-bm25
+fastapi
+faiss-cpu
