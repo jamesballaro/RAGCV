@@ -1,14 +1,14 @@
 # This file will assemble the graph logic from the agents, exposing an interface for the pipeline to use
-import operator
 
-from typing import TypedDict, List, Annotated
+from typing import TypedDict, List, Dict
 
 from langchain_core.messages import  AnyMessage
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
-from .utils.logger import JSONLLogger
-class RouterGraphState(TypedDict):
-    messages: Annotated[List[AnyMessage], operator.add]
+from ..utils.logger import JSONLLogger
+from ..factories.agent_factory import SpecialisedAgentFactory
+from .state import RouterGraphState
+from ..graph.node import AgentNodeWrapper
 
 class RouterGraph:
     """
@@ -30,14 +30,12 @@ class RouterGraph:
             for rank in range(self.min_rank, self.max_rank +1)
         }
         self.agent_names = [agent["name"] for agent in agents]
-        self.execution_log = []
 
         self.graph = StateGraph(RouterGraphState)
 
         for agent in self.agents:
             rank = agent['rank']
 
-            agent['node'] = self._wrap_agent(agent['node'], agent["name"])
             self.hierarchy[rank]['names'].append(agent['name'])
             self.hierarchy[rank]['nodes'].append(agent['node'])
             self.graph.add_node(agent['name'], agent['node'])
@@ -68,6 +66,8 @@ class RouterGraph:
         if rank < self.max_rank:
             targets = self.hierarchy[rank +1]
             return {target_node: target_node for target_node in targets['names']}
+        else: 
+            return {"END": END}
 
     def _add_conditional_edges(self, source_node, agent_data, rank):
         """Add conditional edges for a source node"""
@@ -76,9 +76,11 @@ class RouterGraph:
         if any(item not in self.agent_map for item in cond_links):
             raise RuntimeError('Conditional link invalid; No agent to fulfill selection')
         
+        target_dict = self._get_target_dict(rank)
+
         routing_dict = {
             cond_node: cond_node for cond_node in cond_links
-        } | {"END": END}
+        } | target_dict
 
         routing_dict |= self._get_target_dict(rank)
 
@@ -107,58 +109,38 @@ class RouterGraph:
         else:  
             self.graph.add_edge(source_node, END)
 
-    def _wrap_agent(self, agent, agent_name):
-        """Wrapper to log agent executions"""
-        def wrapped_agent(state):
-            result = agent(state)
-            if result.get("messages"):
-                last_msg = result["messages"][-1]
-                self.execution_log.append({
-                    "agent": agent_name,
-                    "message": last_msg.content
-                })
-            return result
-        return wrapped_agent
+    def route(self, state: RouterGraphState):
 
-    def  route(self, state: RouterGraphState):
-        last_message = state["messages"][-1]
-        pathway = last_message.content
+        router_input = state['latest_message']
 
-        if pathway == "END":
-            self.logger.log_conversation(state["messages"])
+        task = state.get('task', None)
+        status = router_input.get('status', None) 
+
+        route_map = {
+                'Cover Letter': 'CL_Task_Agent',
+                'CV': 'CV_Task_Agent'
+            }
+
+        pathway = route_map[task]
+
+        if status:
+            pathway = 'END' if status == 'PASS' else route_map[task]
+
+        if pathway == 'END':
             return "END"
-
+        
         # Handle invalid pathway:
         if pathway not in self.graph.nodes.keys():
             print(f"[Error: Invalid pathway: {pathway}]")
             return "END"
 
-        runs = {entry['name']: 0 for entry in self.agents}
-        for entry in self.execution_log:
-            runs[entry['agent']] += 1
-
-        # TODO: Fix this hacky solution to prevent infinite loops
-        if runs.get(pathway, 0) >= 2:
-            print(f"[Error: Detected potential infinite loop with pathway: {pathway}]\n\t[Loop forcibly terminated.]")
-            return "END"
-
         return pathway
-            
-    def get_execution_summary(self):
-        if not self.execution_log:
-            return "No agents were executed."
-
-        summary = "Execution Summary:\n" + "="*50 + "\n"
-        for entry in self.execution_log:
-            summary += f"\n[{entry['agent']}]\n{entry['message']}\n"
-        return summary
 
     def draw(self):
         """Creates a mermaid image of the graph and saves it"""
         self.graph.get_graph().draw_mermaid_png(output_file_path="img/graph.png")
         
     def invoke(self, message):
-        self.execution_log = []
         output = self.graph.invoke(message, config=self.config)
         return output
 

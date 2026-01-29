@@ -1,7 +1,3 @@
-# This file will parse the query and process the request to the pipeline
-# We will load documents and create a vector store, and a retriever
-# We then set up the graph, passing in the retriever and the agents
-# We will then run the graph, passing in the query
 import argparse
 from datetime import datetime as dt
 
@@ -11,15 +7,14 @@ from langchain_openai import OpenAIEmbeddings
 
 from dotenv import load_dotenv
 
-
-from .loader import DataLoader
-from .graph import RouterGraph
-from .tools.tools import build_registry
-from .utils.logger import JSONLLogger
-from .retrieval.enricher import QueryEnricher
-from .retrieval.retrieval import AdaptiveRetriever
-from .spec.models import RetrievalConfig
-from .spec.loader import load_graph_config, load_retrieval_config
+from ..core.loader import DataLoader
+from ..graph.graph import RouterGraph
+from ..utils.logger import JSONLLogger
+from ..retrieval.enricher import QueryEnricher
+from ..retrieval.retrieval import AdaptiveRetriever
+from ..tools.tools import build_registry
+from ..utils.file import write_to_file
+from ..spec.loader import load_graph_config, load_retrieval_config
 
 def main():
     load_dotenv()
@@ -30,24 +25,26 @@ def main():
     parser.add_argument("--test_name", default=time)
     args = parser.parse_args()
 
-    loader = DataLoader(data_path="data", db_path="data/db.faiss")
+    log_path = f"logs/ragcv_headless_log_{args.test_name}.jsonl"
+
+    loader = DataLoader(data_path="data_real/", db_path="data/db.faiss")
     embeddings = OpenAIEmbeddings()
+    logger = JSONLLogger(log_path=log_path)
 
     # Construct vectorstore (either done from local save or re-generated if new data is present)
+    documents = loader.get_documents()
     vectorstore = loader.load_vectorstore(embeddings=embeddings)
-        
-    # Logging
-    log_path = f"logs/agent_runs_{args.test_name}.jsonl"
-    logger = JSONLLogger(log_path=log_path)
-    
+            
     # Setting up RAG
     retrieval_cfg = load_retrieval_config(path="config/retrieval.yml")
     
     retriever = AdaptiveRetriever(
         vectorstore=vectorstore, 
-        embeddings=embeddings,
-        config=retrieval_cfg
+        documents=documents,
+        config=retrieval_cfg,
+        logger=logger
     )
+
     enricher = QueryEnricher(retriever=retriever,logger=logger)
 
     # Set up the tools to pass to agents
@@ -58,6 +55,7 @@ def main():
         path="config/graph.yml",
         tools=tools_list,
         logger=logger,
+        enricher=enricher
     )
 
     # Construct graph
@@ -65,17 +63,20 @@ def main():
 
     with open("input/query.txt", "r") as f:
         query = f.read()
-
-    message = enricher.enrich_with_context(query)
-
+    
     graph.draw() # Optional
     
-    graph.invoke({'messages' : [HumanMessage(content=message)]})
+    final_state = graph.invoke({
+        'job_description' : HumanMessage(content=query),
+    })
 
-    # Print console summary (requirement 1)
+    write_to_file(final_state.get("document", "Error: No Document Found"), "output.txt")
+    write_to_file(final_state.get("summary", "Error: No Summary Found"), "summary.txt")
+    
+    # Print console summary
     print("\n" + "="*60)
     print("JOB APPLICATION ASSISTANT - EXECUTION COMPLETE\n\n","="*60)
-    print(graph.get_execution_summary())
+    print(logger.get_conversation_log())
     print("="*60,"\n\nCheck the 'output' directory for your tailored documents.")
 
 if __name__ == "__main__":

@@ -5,8 +5,8 @@ from pydantic import BaseModel, field_validator, model_validator
 
 class AgentConfig(BaseModel):
     name: str
-    prompt_path: str
     rank: int
+    prompt_path: Optional[str] = None
     temperature: Optional[float] = 0.8
     conditional_links: Optional[List[str]] = None
     hard_links: Optional[List[str]] = None
@@ -67,43 +67,14 @@ class GraphConfig(BaseModel):
         return cls(**cfg_dict)
 
 class RetrievalConfig(BaseModel):
-    base_k: int = 10
-    mmr_k: int = 5
-    mmr_lambda: float = 0.6
-    score_threshold: float = 0.15
-    min_high_score: int = 5
-    dedupe_threshold: float = 0.88
-    # hybrid retrieval settings
-
+    rag_threshold: int = 10000
+    base_k: int = 15
+    rerank_top_k: int = 5     # Final number of documents to return
+    rerank_threshold: int = -2
+    max_total_chunks: int = 10 
     use_hybrid: bool = True
-    bm25_weight: float = 0.5
+    bm25_weight: float = 0.5  # 0.5 = equal weighting
     embedding_weight: float = 0.5
-
-
-
-    @field_validator("base_k", "min_high_score", "mmr_k")
-    @classmethod
-    def validate_positive_int(cls, v: int, info) -> int:
-        """Ensure k values are positive."""
-        if v <= 0:
-            raise ValueError(f"{info.field_name} must be positive, got {v}")
-        return v
-
-    @field_validator("score_threshold", "dedupe_threshold")
-    @classmethod
-    def validate_threshold_range(cls, v: float, info) -> float:
-        """Ensure thresholds are in [0, 1]."""
-        if not 0 <= v <= 1:
-            raise ValueError(f"{info.field_name} must be between 0 and 1, got {v}")
-        return v
-
-    @field_validator("mmr_lambda")
-    @classmethod
-    def validate_mmr_lambda(cls, v: float) -> float:
-        """Ensure MMR lambda is in [0, 1]."""
-        if not 0 <= v <= 1:
-            raise ValueError(f"mmr_lambda must be between 0 and 1, got {v}")
-        return v
 
     @field_validator("bm25_weight", "embedding_weight")
     @classmethod
@@ -123,15 +94,6 @@ class RetrievalConfig(BaseModel):
                     f"bm25_weight + embedding_weight should sum to 1.0, "
                     f"got {weight_sum:.3f} ({self.bm25_weight} + {self.embedding_weight})"
                 )
-        return self
-
-    @model_validator(mode='after')
-    def validate_mmr_k_vs_base_k(self) -> 'RetrievalConfig':
-        """Ensure MMR k doesn't exceed base k."""
-        if self.mmr_k > self.base_k:
-            raise ValueError(
-                f"mmr_k ({self.mmr_k}) cannot exceed base_k ({self.base_k})"
-            )
         return self
 
     @classmethod

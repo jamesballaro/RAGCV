@@ -20,8 +20,8 @@ from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.messages import HumanMessage
 
-from ragcv.loader import DataLoader
-from ragcv.graph import RouterGraph
+from ragcv.core.loader import DataLoader
+from ragcv.graph.graph import RouterGraph
 from ragcv.tools.tools import build_registry
 from ragcv.utils.logger import JSONLLogger
 from ragcv.retrieval.enricher import QueryEnricher
@@ -45,15 +45,16 @@ async def lifespan(app: FastAPI):
     print("="*60)
     
     # 1. Initialize Vectorstore
-    loader = DataLoader(data_path="data", db_path="data/db.faiss")
+    loader = DataLoader(data_path="data_real/", db_path="data/db.faiss")
     embeddings = OpenAIEmbeddings()
     vectorstore = loader.load_vectorstore(embeddings=embeddings)
-    
+    documents = loader.get_documents()
+
     # 2. Setup Retriever
     retrieval_cfg = load_retrieval_config(path="config/retrieval.yml")
     app.state.retriever = AdaptiveRetriever(
         vectorstore=vectorstore, 
-        embeddings=embeddings, 
+        documents=documents,
         config=retrieval_cfg
     )
     
@@ -87,12 +88,6 @@ class LaTeXRequest(BaseModel):
 # Persistent background task store
 tasks: Dict[str, dict] = {}
 
-def read_file_safe(path: str) -> str:
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    return ""
-
 # =====================================================================
 # CORE LOGIC (BACKGROUND TASKS)
 # =====================================================================
@@ -102,7 +97,7 @@ async def run_graph_task(task_id: str, input_text: str, retriever: AdaptiveRetri
     Executes the RAG pipeline. 
     Note: retriever is passed from app.state at the time of task creation.
     """
-    log_path = f"logs/task_{task_id}.jsonl"
+    log_path = f"logs/ragcv_app_log{task_id}.jsonl"
     output_dir = f"output/{task_id}"
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs("logs", exist_ok=True)
@@ -114,19 +109,19 @@ async def run_graph_task(task_id: str, input_text: str, retriever: AdaptiveRetri
         enricher = QueryEnricher(retriever=retriever, logger=task_logger)
         tools_list = build_registry(test_name=task_id) 
         
-        graph_cfg = load_graph_config(path="config/graph.yml", tools=tools_list, logger=task_logger)
+        graph_cfg = load_graph_config(path="config/graph.yml", tools=tools_list, logger=task_logger, enricher=enricher)
         graph = RouterGraph(agents=graph_cfg, logger=task_logger)
 
-        # Step 1: Enrichment
-        message = await asyncio.to_thread(enricher.enrich_with_context, input_text)
-        tasks[task_id]["artifacts"] = [doc.metadata.get('source', 'unknown') for doc in enricher.retrieved_docs]
+        graph_input = {
+            'job_description': HumanMessage(content=input_text),
+        }
 
         # Step 2: Graph Execution
-        await asyncio.to_thread(graph.invoke, {'messages': [HumanMessage(content=message)]})
+        final_state = await asyncio.to_thread(graph.invoke, graph_input)
 
         # Step 3: Collect Results
-        tasks[task_id]["result"] = read_file_safe(f"{output_dir}/cl_output.txt")
-        tasks[task_id]["summary"] = read_file_safe(f"{output_dir}/summary_output.txt")
+        tasks[task_id]["result"] = final_state.get("document")
+        tasks[task_id]["summary"] = final_state.get("summary")
         tasks[task_id]["status"] = "completed"
         
     except Exception as e:
@@ -140,7 +135,7 @@ async def run_graph_task(task_id: str, input_text: str, retriever: AdaptiveRetri
 
 @app.post("/query")
 async def start_query(request: QueryRequest, background_tasks: BackgroundTasks):
-    task_id = f"task_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    task_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     tasks[task_id] = {
         "status": "pending", 
         "result": None, 
@@ -160,7 +155,7 @@ async def get_status(task_id: str):
     return tasks[task_id]
 
 @app.get("/logs/{task_id}")
-async def get_logs(task_id: str, tail: int = 50):
+async def get_logs(task_id: str):
     log_path = f"logs/task_{task_id}.jsonl"
     if not os.path.exists(log_path):
         return {"logs": "Initializing task logs..."}
@@ -168,7 +163,7 @@ async def get_logs(task_id: str, tail: int = 50):
     try:
         with open(log_path, "r") as f:
             lines = f.readlines()
-            return {"logs": "".join(lines[-tail:])}
+            return {"logs": "".join(lines)}
     except Exception as e:
         return {"logs": f"Error: {str(e)}"}
 
@@ -187,12 +182,18 @@ async def compile_latex(request: LaTeXRequest):
                 stderr=subprocess.PIPE,
                 timeout=30
             )
+            pdf_file = os.path.join(temp_dir, "document.pdf")
 
-            if result.returncode != 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail=result.stderr.decode(errors="ignore")
-                )
+            # If the PDF exists, ignore the returncode and return the file
+            if os.path.exists(pdf_file):
+                with open(pdf_file, "rb") as f:
+                    return Response(content=f.read(), media_type="application/pdf")
+
+            # If no PDF was generated, then it's a real fatal error
+            raise HTTPException(
+                status_code=400,
+                detail=result.stdout.decode(errors="ignore") # stdout contains the TeX log
+            )
         
         pdf_file = os.path.join(temp_dir, "document.pdf")
         if not os.path.exists(pdf_file):

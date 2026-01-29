@@ -18,6 +18,10 @@ This repository provides a retrieval-augmented generation (RAG) pipeline for qui
    ```bash
    conda env create -f environment.yml
    conda activate ragcv
+   
+   #Install spacy 
+   python -m spacy download en_core_web_sm
+   ```
 
 2. Set your OpenAI API key:
 ```bash

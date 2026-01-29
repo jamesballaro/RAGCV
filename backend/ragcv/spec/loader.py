@@ -1,30 +1,45 @@
 from pathlib import Path
 from typing import Any, List, Dict
-from ..agents import Agent               
+from langchain_openai import OpenAIEmbeddings
+
 from .models import GraphConfig, RetrievalConfig
 from ..retrieval.retrieval import AdaptiveRetrieverConfig
+from ..factories.agent_factory import SpecialisedAgentFactory
+from ..graph.node import AgentNodeWrapper
+
 
 def load_graph_config(
     path: str | Path,
     tools: Any,
-    logger: Any
+    logger: Any,
+    enricher: Any,
 ) -> List[Dict[str, Any]]:
     """
     Load graph configuration and construct Agent objects.
     """
+    agent_factory = SpecialisedAgentFactory()
     # Load and validate the config using the class method
     graph_spec = GraphConfig.from_yaml(path)
 
     # Construct Agent objects
     agents = []
     for spec in graph_spec.agents:
-        node = Agent(
-            name=spec.name,
-            prompt_path=spec.prompt_path,
-            logger=logger,
-            tools=tools,
-            temperature=spec.temperature,
-        )
+    
+        try:
+            agent = agent_factory.create_agent(
+                name=spec.name,
+                tools=tools,
+            )
+
+            node = AgentNodeWrapper(
+                    agent=agent, 
+                    agent_name=spec.name,
+                    logger=logger,
+                    enricher=enricher
+                )
+            
+        except Exception as e:
+            raise RuntimeError(f"[Error constructing agent {spec.name}, {e}]")
 
         entry = {
             "name": spec.name,
